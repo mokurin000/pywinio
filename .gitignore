@@ -1,0 +1,4 @@
+/target
+/python/pywinio/_pywinio.pyd
+**/__pycache__/
+*.pyc
