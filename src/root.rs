@@ -124,7 +124,7 @@ impl Component for PyRoot {
         // loop when it is called from another thread.
         #[cfg(windows)]
         {
-            let hwnd = window.as_window().as_win32();
+            let hwnd = window.as_window().handle()?;
             shared.set_window(hwnd as isize);
         }
         let _ = &shared;

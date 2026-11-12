@@ -139,6 +139,25 @@ impl PyApp {
         ))
     }
 
+    /// Create a push button.
+    #[pyo3(signature = (id, text, *, on_click = None))]
+    fn button(
+        &self,
+        py: Python<'_>,
+        id: &str,
+        text: &str,
+        on_click: Option<Py<PyAny>>,
+    ) -> PyResult<PyButton> {
+        check_callback(py, &on_click, "on_click")?;
+        make_button(&self.shared, id, text, on_click)
+    }
+
+    /// Create a text label.
+    #[pyo3(signature = (id, text = ""))]
+    fn label(&self, id: &str, text: &str) -> PyLabel {
+        make_label(&self.shared, id, text)
+    }
+
     /// Create a single-line text input.
     ///
     /// Add it to a container with `container.add(edit, ...)`.
@@ -418,7 +437,6 @@ impl PyApp {
 /// A stacked layout container.
 #[pyclass(name = "StackPanel")]
 pub struct PyStackPanel {
-    shared: Arc<Shared>,
     layout: Arc<LayoutSpec>,
 }
 
@@ -451,57 +469,11 @@ impl PyStackPanel {
         let opts = item_opts(grow, margin, halign, valign, width, height)?;
         push_child(&self.layout, child, opts)
     }
-
-    /// Create a label and append it.
-    #[pyo3(signature = (id, text))]
-    fn add_label(&self, id: &str, text: &str) -> PyResult<PyLabel> {
-        let label = make_label(&self.shared, id, text);
-        self.layout
-            .push(Elem::Widget(label.node.clone()), ItemOpts::default());
-        Ok(label)
-    }
-
-    /// Create a button and append it.
-    #[pyo3(signature = (id, text, *, on_click = None))]
-    fn add_button(&self, id: &str, text: &str, on_click: Option<Py<PyAny>>) -> PyResult<PyButton> {
-        let button = make_button(&self.shared, id, text, on_click)?;
-        self.layout
-            .push(Elem::Widget(button.node.clone()), ItemOpts::default());
-        Ok(button)
-    }
-
-    /// Create a nested stack and append it.
-    #[pyo3(signature = (orient = "vertical", spacing = 0.0, padding = 0.0))]
-    fn add_stack(&self, orient: &str, spacing: f64, padding: f64) -> PyResult<PyStackPanel> {
-        let panel = new_stack(&self.shared, parse_orient(orient)?, spacing, padding);
-        self.layout
-            .push(Elem::Panel(panel.layout.clone()), ItemOpts::default());
-        Ok(panel)
-    }
-
-    /// Create a nested grid and append it.
-    #[pyo3(signature = (columns = "", rows = "", col_gap = 0.0, row_gap = 0.0, padding = 0.0))]
-    fn add_grid(
-        &self,
-        columns: &str,
-        rows: &str,
-        col_gap: f64,
-        row_gap: f64,
-        padding: f64,
-    ) -> PyResult<PyGrid> {
-        let columns = Track::parse_list(columns).map_err(PyValueError::new_err)?;
-        let rows = Track::parse_list(rows).map_err(PyValueError::new_err)?;
-        let grid = new_grid(&self.shared, columns, rows, col_gap, row_gap, padding);
-        self.layout
-            .push(Elem::Panel(grid.layout.clone()), ItemOpts::default());
-        Ok(grid)
-    }
 }
 
 /// A grid layout container.
 #[pyclass(name = "Grid")]
 pub struct PyGrid {
-    shared: Arc<Shared>,
     layout: Arc<LayoutSpec>,
 }
 
@@ -546,76 +518,6 @@ impl PyGrid {
         opts.col_span = col_span.max(1);
         check_grid_bounds(&self.layout, &opts)?;
         push_child(&self.layout, child, opts)
-    }
-
-    /// Create a label and append it at a grid position.
-    #[pyo3(signature = (id, text, *, row = 0, col = 0, row_span = 1, col_span = 1))]
-    fn add_label(
-        &self,
-        id: &str,
-        text: &str,
-        row: usize,
-        col: usize,
-        row_span: usize,
-        col_span: usize,
-    ) -> PyResult<PyLabel> {
-        let mut opts = ItemOpts::default();
-        opts.row = row;
-        opts.col = col;
-        opts.row_span = row_span.max(1);
-        opts.col_span = col_span.max(1);
-        check_grid_bounds(&self.layout, &opts)?;
-        let label = make_label(&self.shared, id, text);
-        self.layout.push(Elem::Widget(label.node.clone()), opts);
-        Ok(label)
-    }
-
-    /// Create a button and append it at a grid position.
-    #[pyo3(signature = (id, text, *, on_click = None, row = 0, col = 0, row_span = 1, col_span = 1))]
-    #[allow(clippy::too_many_arguments)]
-    fn add_button(
-        &self,
-        id: &str,
-        text: &str,
-        on_click: Option<Py<PyAny>>,
-        row: usize,
-        col: usize,
-        row_span: usize,
-        col_span: usize,
-    ) -> PyResult<PyButton> {
-        let mut opts = ItemOpts::default();
-        opts.row = row;
-        opts.col = col;
-        opts.row_span = row_span.max(1);
-        opts.col_span = col_span.max(1);
-        check_grid_bounds(&self.layout, &opts)?;
-        let button = make_button(&self.shared, id, text, on_click)?;
-        self.layout.push(Elem::Widget(button.node.clone()), opts);
-        Ok(button)
-    }
-
-    /// Create a nested stack and append it at a grid position.
-    #[pyo3(signature = (orient = "vertical", spacing = 0.0, padding = 0.0, *, row = 0, col = 0, row_span = 1, col_span = 1))]
-    #[allow(clippy::too_many_arguments)]
-    fn add_stack(
-        &self,
-        orient: &str,
-        spacing: f64,
-        padding: f64,
-        row: usize,
-        col: usize,
-        row_span: usize,
-        col_span: usize,
-    ) -> PyResult<PyStackPanel> {
-        let mut opts = ItemOpts::default();
-        opts.row = row;
-        opts.col = col;
-        opts.row_span = row_span.max(1);
-        opts.col_span = col_span.max(1);
-        check_grid_bounds(&self.layout, &opts)?;
-        let panel = new_stack(&self.shared, parse_orient(orient)?, spacing, padding);
-        self.layout.push(Elem::Panel(panel.layout.clone()), opts);
-        Ok(panel)
     }
 }
 
@@ -1757,7 +1659,6 @@ fn check_callback(py: Python<'_>, callback: &Option<Py<PyAny>>, name: &str) -> P
 fn new_stack(shared: &Arc<Shared>, orient: Orient, spacing: f64, padding: f64) -> PyStackPanel {
     let key = shared.next_layout_key();
     PyStackPanel {
-        shared: shared.clone(),
         layout: Arc::new(LayoutSpec::stack(
             key,
             orient,
@@ -1777,7 +1678,6 @@ fn new_grid(
 ) -> PyGrid {
     let key = shared.next_layout_key();
     PyGrid {
-        shared: shared.clone(),
         layout: Arc::new(LayoutSpec::grid(
             key,
             columns,

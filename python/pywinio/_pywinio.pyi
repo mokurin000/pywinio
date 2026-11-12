@@ -15,6 +15,10 @@ class App:
     closed (or [`quit`](PyApp::quit) is called).
     """
     def __new__(cls, /, title: str, size: tuple[SupportsFloat | SupportsIndex, SupportsFloat | SupportsIndex] = ...) -> App: ...
+    def button(self, /, id: str, text: str, *, on_click: Any | None = None) -> Button:
+        """
+        Create a push button.
+        """
     def check_box(self, /, id: str, text: str = "", checked: bool = False, *, on_click: Any | None = None) -> CheckBox:
         """
         Create a check box.
@@ -35,6 +39,10 @@ class App:
 
         `columns` and `rows` use winio's track notation: `"1*,2*"` for weighted
         tracks, `"120"` for a fixed track and `"auto"` for content sizing.
+        """
+    def label(self, /, id: str, text: str = "") -> Label:
+        """
+        Create a text label.
         """
     def link_label(self, /, id: str, text: str = "", uri: str = "", *, on_click: Any | None = None) -> LinkLabel:
         """
@@ -238,18 +246,6 @@ class Grid:
     def add(self, /, child: Any, *, row: SupportsIndex = 0, col: SupportsIndex = 0, row_span: SupportsIndex = 1, col_span: SupportsIndex = 1, margin: tuple[SupportsFloat | SupportsIndex, SupportsFloat | SupportsIndex, SupportsFloat | SupportsIndex, SupportsFloat | SupportsIndex] | None = None, halign: str = "stretch", valign: str = "stretch", width: SupportsFloat | SupportsIndex | None = None, height: SupportsFloat | SupportsIndex | None = None) -> None:
         """
         Add a widget or a nested container at a grid position.
-        """
-    def add_button(self, /, id: str, text: str, *, on_click: Any | None = None, row: SupportsIndex = 0, col: SupportsIndex = 0, row_span: SupportsIndex = 1, col_span: SupportsIndex = 1) -> Button:
-        """
-        Create a button and append it at a grid position.
-        """
-    def add_label(self, /, id: str, text: str, *, row: SupportsIndex = 0, col: SupportsIndex = 0, row_span: SupportsIndex = 1, col_span: SupportsIndex = 1) -> Label:
-        """
-        Create a label and append it at a grid position.
-        """
-    def add_stack(self, /, orient: str = "vertical", spacing: SupportsFloat | SupportsIndex = 0.0, padding: SupportsFloat | SupportsIndex = 0.0, *, row: SupportsIndex = 0, col: SupportsIndex = 0, row_span: SupportsIndex = 1, col_span: SupportsIndex = 1) -> StackPanel:
-        """
-        Create a nested stack and append it at a grid position.
         """
     @property
     def columns(self, /) -> int: ...
@@ -467,22 +463,6 @@ class StackPanel:
     def add(self, /, child: Any, *, grow: bool = False, margin: tuple[SupportsFloat | SupportsIndex, SupportsFloat | SupportsIndex, SupportsFloat | SupportsIndex, SupportsFloat | SupportsIndex] | None = None, halign: str = "stretch", valign: str = "stretch", width: SupportsFloat | SupportsIndex | None = None, height: SupportsFloat | SupportsIndex | None = None) -> None:
         """
         Add a widget or a nested container.
-        """
-    def add_button(self, /, id: str, text: str, *, on_click: Any | None = None) -> Button:
-        """
-        Create a button and append it.
-        """
-    def add_grid(self, /, columns: str = "", rows: str = "", col_gap: SupportsFloat | SupportsIndex = 0.0, row_gap: SupportsFloat | SupportsIndex = 0.0, padding: SupportsFloat | SupportsIndex = 0.0) -> Grid:
-        """
-        Create a nested grid and append it.
-        """
-    def add_label(self, /, id: str, text: str) -> Label:
-        """
-        Create a label and append it.
-        """
-    def add_stack(self, /, orient: str = "vertical", spacing: SupportsFloat | SupportsIndex = 0.0, padding: SupportsFloat | SupportsIndex = 0.0) -> StackPanel:
-        """
-        Create a nested stack and append it.
         """
     @property
     def orient(self, /) -> str: ...

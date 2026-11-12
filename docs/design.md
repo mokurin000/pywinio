@@ -350,9 +350,10 @@ async fn start(&mut self, sender: &ComponentSender<Self>) -> ! {
 ```python
 app = w.App(...)                 # 1. 创建 Shared（sender 表、id 生成器）
 root = app.stack(...)            # 2. 创建 LayoutSpec
-btn = root.add_button(...)       # 3. 创建 WidgetNode，挂到布局树
-app.root = root                  # 4. 记录根布局
-app.run()                        # 5. 进入 Rust
+btn = app.button(...)            # 3. 创建 WidgetNode
+root.add(btn, grow=True, ...)    # 4. 挂到布局树并一次性给出布局参数
+app.root = root                  # 5. 记录根布局
+app.run()                        # 6. 进入 Rust
 ```
 
 Rust 侧：
@@ -556,24 +557,28 @@ import pywinio as w
 app = w.App("pywinio PoC — Button + Label", (720, 480))
 
 root = app.stack(orient="vertical", spacing=12, padding=16)
-header = root.add_label("header", "pywinio — declarative Python UI on winio")
+header = app.label("header", "pywinio — declarative Python UI on winio")
+root.add(header)
 
 grid = app.grid(columns="1*,1*", rows="auto", col_gap=16)
 root.add(grid, grow=True)
 
-left = grid.add_stack(orient="vertical", spacing=6, row=0, col=0)
-counter = left.add_label("counter", "0 clicks")
-left.add_label("hint", "The labels are updated from the button callback.")
+left = app.stack(orient="vertical", spacing=6)
+grid.add(left, row=0, col=0)
+counter = app.label("counter", "0 clicks")
+left.add(counter)
+left.add(app.label("hint", "The labels are updated from the button callback."))
 
-right = grid.add_stack(orient="horizontal", spacing=8, row=0, col=1)
+right = app.stack(orient="horizontal", spacing=8)
+grid.add(right, row=0, col=1)
 
 def add(delta):
     global clicks
     clicks += delta
     counter.text = f"{clicks} clicks"     # 运行时属性修改
 
-right.add_button("inc", "+1", on_click=lambda: add(1))
-right.add_button("dec", "−1", on_click=lambda: add(-1))
+right.add(app.button("inc", "+1", on_click=lambda: add(1)))
+right.add(app.button("dec", "−1", on_click=lambda: add(-1)))
 
 app.root = root
 app.run()
@@ -600,6 +605,8 @@ grid.add(slider, row=2, col=1)
 | `App(title, size=(720, 480))` | 创建应用；此时尚未创建窗口 |
 | `app.stack(orient="vertical", spacing=0.0, padding=0.0)` | 创建根/独立 StackPanel |
 | `app.grid(columns="", rows="", col_gap=0.0, row_gap=0.0, padding=0.0)` | 创建 Grid |
+| `app.label(id, text="")` | 创建 Label |
+| `app.button(id, text, *, on_click=None)` | 创建 Button |
 | `app.edit(id, text="", *, on_change=None)` | 创建 Edit |
 | `app.check_box(id, text="", checked=False, *, on_click=None)` | 创建 CheckBox |
 | `app.link_label(id, text="", uri="", *, on_click=None)` | 创建 LinkLabel |
@@ -617,23 +624,21 @@ grid.add(slider, row=2, col=1)
 | `app.quit()` | 请求关闭；可从其他线程调用 |
 | `app.running` | 是否在运行 |
 
+所有 widget 统一由 `App.xxx()` 创建，再通过 `container.add(widget, ..., margin=..., grow=...)`
+一次性加入布局。容器不再提供 `add_label` / `add_button` / `add_stack` / `add_grid`，避免“先添加、再想办法改
+margin/halign/valign/grow”的 API 分裂。
+
 **StackPanel**
 
 | 成员 | 说明 |
 | --- | --- |
 | `add(child, *, grow=False, margin=None, halign="stretch", valign="stretch", width=None, height=None)` | 添加 widget 或嵌套容器 |
-| `add_label(id, text)` / `add_button(id, text, *, on_click=None)` | 创建并添加 |
-| `add_stack(orient="vertical", spacing=0.0, padding=0.0)` | 创建嵌套 StackPanel 并添加 |
-| `add_grid(columns="", rows="", ...)` | 创建嵌套 Grid 并添加 |
 
 **Grid**
 
 | 成员 | 说明 |
 | --- | --- |
 | `add(child, *, row=0, col=0, row_span=1, col_span=1, margin=None, halign=..., valign=..., width=None, height=None)` | 按格子放置 |
-| `add_label(id, text, *, row=0, col=0, row_span=1, col_span=1)` | 创建并放置 |
-| `add_button(id, text, *, on_click=None, row=0, col=0, ...)` | 同上 |
-| `add_stack(orient=..., ..., *, row=0, col=0, ...)` | 嵌套容器 |
 | `rows` / `columns` | 轨道数量 |
 
 **Widget 属性**

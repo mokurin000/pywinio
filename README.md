@@ -79,12 +79,13 @@ import pywinio as w
 app = w.App("Counter", (640, 480))
 
 root = app.stack(orient="vertical", spacing=8, padding=16)
-counter = root.add_label("counter", "0 clicks")
+counter = app.label("counter", "0 clicks")
+root.add(counter)
 
 def inc():
     counter.text = "1 clicks"   # 运行时改属性 -> 投递命令 -> 重排
 
-root.add_button("inc", "+1", on_click=inc)
+root.add(app.button("inc", "+1", on_click=inc))
 
 app.root = root
 app.run()      # 阻塞；回调在 UI 线程执行
@@ -92,6 +93,9 @@ app.run()      # 阻塞；回调在 UI 线程执行
 
 更完整的嵌套/Grid 示例见 [examples/counter.py](examples/counter.py)，
 全组件示例见 [examples/gallery.py](examples/gallery.py)。
+
+所有组件统一由 `App.xxx()` 创建，再用 `container.add(widget, grow=..., margin=..., halign=...)`
+一次性加入布局；容器本身不再提供 `add_button` / `add_label` / `add_stack` / `add_grid`。
 
 新增组件通过 `App` 工厂创建，再用通用 `add` 放入布局：
 
@@ -102,7 +106,7 @@ radio = app.radio_button("radio", "choice", checked=True, on_click=refresh)
 
 scroll = app.scroll_view("scroll", hscroll=False, vscroll=True)
 content = app.stack(orient="vertical")
-content.add_label("row", "scrollable content")
+content.add(app.label("row", "scrollable content"))
 scroll.set_content(content)          # 必须在 run() 前
 grid.add(scroll, row=0, col=1, height=140)
 

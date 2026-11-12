@@ -17,18 +17,22 @@ app = w.App("pywinio PoC — Button + Label", (720, 480))
 # Root: a vertical stack. All children are pre-registered before app.run().
 root = app.stack(orient="vertical", spacing=12, padding=16)
 
-header = root.add_label("header", "pywinio — declarative Python UI on winio")
+header = app.label("header", "pywinio — declarative Python UI on winio")
+root.add(header)
 
 # A grid with two weighted columns; the left column holds labels, the right
 # column holds a horizontal stack of buttons. This exercises nesting.
 grid = app.grid(columns="1*,1*", rows="auto", col_gap=16, row_gap=8)
 root.add(grid, grow=True)
 
-left = grid.add_stack(orient="vertical", spacing=6, row=0, col=0)
-counter = left.add_label("counter", "0 clicks")
-left.add_label("hint", "The labels are updated from the button callback.")
+left = app.stack(orient="vertical", spacing=6)
+grid.add(left, row=0, col=0)
+counter = app.label("counter", "0 clicks")
+left.add(counter)
+left.add(app.label("hint", "The labels are updated from the button callback."))
 
-right = grid.add_stack(orient="horizontal", spacing=8, row=0, col=1)
+right = app.stack(orient="horizontal", spacing=8)
+grid.add(right, row=0, col=1)
 
 clicks = 0
 
@@ -47,13 +51,15 @@ def reset():
     header.text = "pywinio — declarative Python UI on winio"
 
 
-inc = right.add_button("inc", "+1", on_click=lambda: add(1))
-dec = right.add_button("dec", "−1", on_click=lambda: add(-1))
-right.add_button("reset", "Reset", on_click=reset)
+inc = app.button("inc", "+1", on_click=lambda: add(1))
+dec = app.button("dec", "−1", on_click=lambda: add(-1))
+right.add(inc)
+right.add(dec)
+right.add(app.button("reset", "Reset", on_click=reset))
 
 footer = app.stack(orient="horizontal", spacing=8)
 root.add(footer, margin=(0, 8, 0, 0))
-footer.add_button("close", "Close", on_click=app.quit)
+footer.add(app.button("close", "Close", on_click=app.quit))
 
 app.root = root
 

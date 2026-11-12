@@ -1154,6 +1154,7 @@ dependencies = [
  "pyo3",
  "windows-sys 0.61.2",
  "winio",
+ "winio-winui3",
 ]
 
 [[package]]
@@ -1268,6 +1269,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a7852d02fc848982e0c167ef163aaff9cd91dc640ba85e263cb1ce46fae51cd"
 
 [[package]]
+name = "send_wrapper"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd0b0ec5f1c1ca621c432a25813d8d60c88abe6d3e08a3eb9cf37d97a0fe3d73"
+
+[[package]]
 name = "serde"
 version = "1.0.229"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1344,6 +1351,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 
 [[package]]
+name = "slim-detours-sys"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "19a519e4f3dc47c5f55a3c1d87b6ba499a11bd81c3a3ca2ed0c835f5e120fd32"
+dependencies = [
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "slotmap"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1415,6 +1431,12 @@ dependencies = [
  "quote",
  "unicode-ident",
 ]
+
+[[package]]
+name = "sync-unsafe-cell"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8deaecba5382c095cb432cd1e21068dadb144208f057b13720e76bf89749beb4"
 
 [[package]]
 name = "synchrony"
@@ -1919,6 +1941,7 @@ dependencies = [
  "winio-ui-ui-kit",
  "winio-ui-win32",
  "winio-ui-windows-common",
+ "winio-ui-winui",
 ]
 
 [[package]]
@@ -1957,6 +1980,7 @@ dependencies = [
  "objc2-ui-kit",
  "windows-core",
  "windows-sys 0.61.2",
+ "winio-winui3",
 ]
 
 [[package]]
@@ -2155,6 +2179,8 @@ dependencies = [
  "oneshot",
  "rclip-cf-html",
  "slab",
+ "slim-detours-sys",
+ "sync-unsafe-cell",
  "widestring",
  "windows-core",
  "windows-numerics",
@@ -2165,6 +2191,35 @@ dependencies = [
  "winio-pollable",
  "winio-primitive",
  "winio-windows-subset",
+ "winio-winui3",
+]
+
+[[package]]
+name = "winio-ui-winui"
+version = "0.7.0-beta.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d430405852e0347595ab2a1656c109f180e8fd59565fa57eb88b393925f8d544"
+dependencies = [
+ "async-stream",
+ "compio-log",
+ "futures-util",
+ "image",
+ "inherit-methods-macro",
+ "itertools",
+ "send_wrapper",
+ "slim-detours-sys",
+ "sync-unsafe-cell",
+ "windows-collections",
+ "windows-core",
+ "windows-reference",
+ "windows-sys 0.61.2",
+ "winio-callback",
+ "winio-handle",
+ "winio-pollable",
+ "winio-primitive",
+ "winio-ui-windows-common",
+ "winio-windows-subset",
+ "winio-winui3",
 ]
 
 [[package]]
@@ -2179,6 +2234,21 @@ dependencies = [
  "windows-numerics",
  "windows-reference",
  "windows-time",
+]
+
+[[package]]
+name = "winio-winui3"
+version = "0.7.0-alpha.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c7e4a37ed49590f2fcf85e4ec93d09a1e22e8ed41bf62a72f3ef47400fb775b1"
+dependencies = [
+ "windows-collections",
+ "windows-core",
+ "windows-future",
+ "windows-numerics",
+ "windows-reference",
+ "windows-time",
+ "winio-windows-subset",
 ]
 
 [[package]]
