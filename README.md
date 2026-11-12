@@ -21,11 +21,14 @@
 环境：Rust nightly、Python 3.13、Windows 10/11（win32 后端）。
 
 ```powershell
-# 如果 PowerShell 禁止执行脚本：
-# Set-ExecutionPolicy -Scope Process Bypass
+# 推荐在已激活的虚拟环境中
+python -m pip install maturin
+maturin develop --release --offline
+python .\examples\counter.py
 
-.\build.ps1 -Offline
-$env:PYTHONPATH = "$PWD\python"
+# 或者：构建 wheel 后安装
+.\build-wheel.ps1 -Offline
+python -m pip install --force-reinstall target\wheels\pywinio-*.whl
 python .\examples\counter.py
 ```
 
@@ -36,7 +39,7 @@ $env:PYWINIO_AUTOCLOSE_MS = "1500"; python .\examples\counter.py
 ```
 
 > 本机 cargo/git 的 schannel TLS 栈无法访问 crates.io，但依赖已预缓存，所以这里用
-> `-Offline` 构建；正常联网环境直接 `.\build.ps1` 即可。
+> `--offline`；正常联网环境去掉该参数即可。
 
 ## 构建 CPython wheel
 
@@ -60,10 +63,21 @@ wheel 标签跟随当前解释器（本机为 `cp313-cp313-win_amd64`），尚�
 
 ```powershell
 maturin generate-stubs --out python --interpreter python
+python tools/postprocess_stubs.py python/pywinio/_pywinio.pyi
 ```
 
-`build-wheel.ps1` 会先执行该命令刷新 `python/pywinio/_pywinio.pyi`，再构建 wheel；
+`build-wheel.ps1` 会先执行这两步刷新 `python/pywinio/_pywinio.pyi`，再构建 wheel；
 wheel 内同时包含 `_pywinio.pyi` 与 `py.typed`。pyright 对生成结果的检查为 0 errors。
+
+pyo3 会把 `#[pyo3(signature = (...))]` 里的注解当成字符串，maturin 会生成
+`orient: "Literal['vertical', 'horizontal']"` 且不导入 `Literal`；后处理脚本会把
+它们改成真正的 `Literal[...]` 并补上 import。最终 stub 中的布局参数为：
+
+```python
+def stack(..., orient: Literal["vertical", "horizontal"] = "vertical", ...) -> StackPanel: ...
+def add(..., halign: Literal["left", "center", "right", "stretch"] = "stretch",
+            valign: Literal["top", "center", "bottom", "stretch"] = "stretch", ...) -> None: ...
+```
 
 > 需要 `pyo3` 的 `experimental-inspect` feature（已在 `Cargo.toml` 打开），
 > 且扩展模块必须是 `#[pymodule] mod` 内联模块（当前已满足）。
@@ -136,7 +150,8 @@ src/model.rs    声明期数据模型、节点注册表、运行时 sender 表
 src/widget.rs   AnyWidget：所有组件的统一 Component 实现（自动 start/update）
 src/root.rs     PyRoot：窗口、动态子组件 fan-in、布局、事件分发
 src/layout.rs   measure/arrange 两遍布局引擎（含单测）
-python/         Python 包（加载构建出的 _pywinio.pyd）、_pywinio.pyi、py.typed
+python/         Python 包、_pywinio.pyi、py.typed
 examples/       counter.py、gallery.py
+tools/          postprocess_stubs.py（把 maturin 的 Literal 注解字符串改成真类型）
 docs/           设计草案与截图
 ```

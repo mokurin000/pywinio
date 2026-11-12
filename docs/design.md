@@ -792,11 +792,22 @@ maturin 1.16.0 + `pyproject.toml`（mixed Rust/Python 布局）：
 ```powershell
 # 由 #[pymethods] 内省生成 python/pywinio/_pywinio.pyi
 maturin generate-stubs --out python --interpreter python --offline
+python tools/postprocess_stubs.py python/pywinio/_pywinio.pyi
 
 # 普通 build 会把已提交的 stub 一起打进 wheel
 maturin build --release --offline
 # 或：.\build-wheel.ps1 -Offline（会先刷新 stub）
 # 📦 Built wheel ... target\wheels\pywinio-0.1.0-cp313-cp313-win_amd64.whl
+```
+
+后处理脚本把 pyo3 注解字符串（maturin 输出为
+`orient: "Literal['vertical', 'horizontal']"`，且不 import `Literal`）改成真正的
+`Literal[...]`，并在 `from typing import ...` 中补上 `Literal`：
+
+```python
+def stack(self, /, orient: Literal["vertical", "horizontal"] = "vertical", ...) -> StackPanel: ...
+def add(self, /, child: Any, *, halign: Literal["left", "center", "right", "stretch"] = "stretch",
+        valign: Literal["top", "center", "bottom", "stretch"] = "stretch", ...) -> None: ...
 ```
 
 wheel 内容：
@@ -964,7 +975,6 @@ pywinio-0.1.0.dist-info/RECORD
 ```
 Cargo.toml            cdylib + pyo3 0.30（experimental-inspect）+ winio 0.13（win32）
 pyproject.toml        maturin / PEP 621 元数据（mixed Rust/Python 布局）
-build.ps1             构建并把 DLL 拷成 python/pywinio/_pywinio.pyd
 build-wheel.ps1       刷新 stub 并构建 CPython wheel（target/wheels）
 src/lib.rs            pyclass：App / 容器 / 14 种 widget 与 Timer；参数解析与校验
 src/model.rs          WidgetNode、LayoutSpec、Track、Shared/AppRuntime、collect_widgets
@@ -972,6 +982,7 @@ src/widget.rs         AnyWidget（统一 Component 实现）、Cmd/Evt
 src/root.rs           PyRoot（窗口、fan-in、重排、回调分发）、run_app
 src/layout.rs         measure/arrange/validate + 7 个单测
 python/pywinio/       Python 包入口、_pywinio.pyi、py.typed
+tools/                postprocess_stubs.py（Literal 注解后处理）
 examples/             counter.py、gallery.py
 docs/design.md        本文
 ```

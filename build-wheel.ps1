@@ -12,7 +12,7 @@ if (-not (Get-Command maturin -ErrorAction SilentlyContinue)) {
     throw "maturin not found. Install it with: python -m pip install maturin"
 }
 
-# Do not let the development `_pywinio.pyd` (copied by build.ps1) end up in
+# Do not let a development `_pywinio*.pyd` in the source tree end up in
 # the wheel next to maturin's ABI-tagged extension, and do not let it shadow
 # the freshly built extension during stub introspection.
 Remove-Item "python\pywinio\_pywinio*.pyd" -ErrorAction SilentlyContinue
@@ -21,10 +21,13 @@ Remove-Item -Recurse -Force "python\pywinio\__pycache__" -ErrorAction SilentlyCo
 $commonArgs = @()
 if ($Offline) { $commonArgs += "--offline" }
 
-# Refresh the stub committed under python/pywinio, then build a wheel that
-# embeds it (maturin --generate-stubs).
+# Refresh the stub committed under python/pywinio, post-process it, then let a
+# normal build package it into the wheel.
 & maturin generate-stubs --out python --interpreter python @commonArgs
 if ($LASTEXITCODE -ne 0) { throw "maturin generate-stubs failed" }
+
+& python tools\postprocess_stubs.py python\pywinio\_pywinio.pyi
+if ($LASTEXITCODE -ne 0) { throw "stub post-processing failed" }
 
 $maturinArgs = @("build", "--release") + $commonArgs
 

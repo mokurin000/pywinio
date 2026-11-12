@@ -104,7 +104,7 @@ impl PyApp {
     }
 
     /// Create a vertical or horizontal stack container.
-    #[pyo3(signature = (orient = "vertical", spacing = 0.0, padding = 0.0))]
+    #[pyo3(signature = (orient: "Literal['vertical', 'horizontal']" = "vertical", spacing = 0.0, padding = 0.0))]
     fn stack(&self, orient: &str, spacing: f64, padding: f64) -> PyResult<PyStackPanel> {
         Ok(new_stack(
             &self.shared,
@@ -454,7 +454,7 @@ impl PyStackPanel {
     }
 
     /// Add a widget or a nested container.
-    #[pyo3(signature = (child, *, grow = false, margin = None, halign = "stretch", valign = "stretch", width = None, height = None))]
+    #[pyo3(signature = (child, *, grow = false, margin = None, halign: "Literal['left', 'center', 'right', 'stretch']" = "stretch", valign: "Literal['top', 'center', 'bottom', 'stretch']" = "stretch", width = None, height = None))]
     #[allow(clippy::too_many_arguments)]
     fn add(
         &self,
@@ -496,7 +496,7 @@ impl PyGrid {
     }
 
     /// Add a widget or a nested container at a grid position.
-    #[pyo3(signature = (child, *, row = 0, col = 0, row_span = 1, col_span = 1, margin = None, halign = "stretch", valign = "stretch", width = None, height = None))]
+    #[pyo3(signature = (child, *, row = 0, col = 0, row_span = 1, col_span = 1, margin = None, halign: "Literal['left', 'center', 'right', 'stretch']" = "stretch", valign: "Literal['top', 'center', 'bottom', 'stretch']" = "stretch", width = None, height = None))]
     #[allow(clippy::too_many_arguments)]
     fn add(
         &self,

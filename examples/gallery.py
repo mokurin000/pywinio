@@ -1,8 +1,8 @@
 # Gallery of every widget supported by the PoC.
 #
 # Run from the repository root:
-#   .\build.ps1 -Offline
-#   $env:PYTHONPATH = "python"; python .\examples\gallery.py
+#   maturin develop --release --offline
+#   python .\examples\gallery.py
 #
 # Set PYWINIO_AUTOCLOSE_MS to auto-close.
 

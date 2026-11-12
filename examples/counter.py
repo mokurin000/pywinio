@@ -2,8 +2,8 @@
 #
 # Run from the repository root:
 #
-#   .\build.ps1
-#   $env:PYTHONPATH = "python"; python .\examples\counter.py
+#   maturin develop --release --offline
+#   python .\examples\counter.py
 #
 # Set PYWINIO_AUTOCLOSE_MS to close the window automatically (useful for CI).
 

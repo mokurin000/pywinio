@@ -1,5 +1,5 @@
 from _typeshed import SupportsGetItem
-from typing import Any, Final, SupportsFloat, SupportsIndex, final
+from typing import Literal, Any, Final, SupportsFloat, SupportsIndex, final
 
 __all__ = ["__version__", "App", "Button", "CheckBox", "ComboBox", "Edit", "Grid", "Label", "LinkLabel", "ListBox", "Progress", "RadioButton", "ScrollView", "Slider", "StackPanel", "TextBox", "Timer", "UpDownEdit"]
 
@@ -96,7 +96,7 @@ class App:
         """
         Create a slider.
         """
-    def stack(self, /, orient: str = "vertical", spacing: SupportsFloat | SupportsIndex = 0.0, padding: SupportsFloat | SupportsIndex = 0.0) -> StackPanel:
+    def stack(self, /, orient: "Literal['vertical', 'horizontal']" = "vertical", spacing: SupportsFloat | SupportsIndex = 0.0, padding: SupportsFloat | SupportsIndex = 0.0) -> StackPanel:
         """
         Create a vertical or horizontal stack container.
         """
@@ -243,7 +243,7 @@ class Grid:
     """
     A grid layout container.
     """
-    def add(self, /, child: Any, *, row: SupportsIndex = 0, col: SupportsIndex = 0, row_span: SupportsIndex = 1, col_span: SupportsIndex = 1, margin: tuple[SupportsFloat | SupportsIndex, SupportsFloat | SupportsIndex, SupportsFloat | SupportsIndex, SupportsFloat | SupportsIndex] | None = None, halign: str = "stretch", valign: str = "stretch", width: SupportsFloat | SupportsIndex | None = None, height: SupportsFloat | SupportsIndex | None = None) -> None:
+    def add(self, /, child: Any, *, row: SupportsIndex = 0, col: SupportsIndex = 0, row_span: SupportsIndex = 1, col_span: SupportsIndex = 1, margin: tuple[SupportsFloat | SupportsIndex, SupportsFloat | SupportsIndex, SupportsFloat | SupportsIndex, SupportsFloat | SupportsIndex] | None = None, halign: "Literal['left', 'center', 'right', 'stretch']" = "stretch", valign: "Literal['top', 'center', 'bottom', 'stretch']" = "stretch", width: SupportsFloat | SupportsIndex | None = None, height: SupportsFloat | SupportsIndex | None = None) -> None:
         """
         Add a widget or a nested container at a grid position.
         """
@@ -460,7 +460,7 @@ class StackPanel:
     """
     A stacked layout container.
     """
-    def add(self, /, child: Any, *, grow: bool = False, margin: tuple[SupportsFloat | SupportsIndex, SupportsFloat | SupportsIndex, SupportsFloat | SupportsIndex, SupportsFloat | SupportsIndex] | None = None, halign: str = "stretch", valign: str = "stretch", width: SupportsFloat | SupportsIndex | None = None, height: SupportsFloat | SupportsIndex | None = None) -> None:
+    def add(self, /, child: Any, *, grow: bool = False, margin: tuple[SupportsFloat | SupportsIndex, SupportsFloat | SupportsIndex, SupportsFloat | SupportsIndex, SupportsFloat | SupportsIndex] | None = None, halign: "Literal['left', 'center', 'right', 'stretch']" = "stretch", valign: "Literal['top', 'center', 'bottom', 'stretch']" = "stretch", width: SupportsFloat | SupportsIndex | None = None, height: SupportsFloat | SupportsIndex | None = None) -> None:
         """
         Add a widget or a nested container.
         """
