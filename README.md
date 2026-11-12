@@ -6,14 +6,14 @@
 `init` / `start` / `update` / `render` 生命周期，原生事件通过统一通道回调到 Python。
 按计划不包含 WebView 与 `compio-compat`。
 
-![counter demo](docs/images/counter.png)
+![widget gallery](docs/images/gallery.png)
 
 ## 已实现
 
-- 组件：`Button`、`Label`
+- 组件：`Button`、`Label`、`Edit`、`CheckBox`、`LinkLabel`、`Progress`、`TextBox`、`Slider`、`UpDownEdit`
 - 布局：`StackPanel`（横/竖、spacing、padding、grow、对齐）、`Grid`（固定/auto/权重轨道、跨行跨列、gap），可任意嵌套
-- 运行时：`label.text = ...` 等属性修改会投递到 UI 线程并触发重排
-- 回调：`on_click=` 注册，自动接到 winio 的 `start`/`update`
+- 运行时：`label.text = ...`、`slider.pos = ...` 等属性修改会投递到 UI 线程并触发重排
+- 回调：`on_click=` / `on_change=` 注册，自动接到 winio 的 `start`/`update`
 - 关闭：标题栏关闭、`Close` 按钮回调 `app.quit()`、跨线程 `app.quit()` 均可用
 
 ## 快速开始（Windows）
@@ -72,7 +72,8 @@ app.root = root
 app.run()      # 阻塞；回调在 UI 线程执行
 ```
 
-更完整的嵌套/Grid 示例见 [examples/counter.py](examples/counter.py)。
+更完整的嵌套/Grid 示例见 [examples/counter.py](examples/counter.py)，
+全组件示例见 [examples/gallery.py](examples/gallery.py)。
 
 ## 设计文档
 
@@ -92,12 +93,12 @@ cargo test --offline --no-default-features
 ```
 pyproject.toml  maturin / PEP 621 元数据（mixed Rust/Python 布局）
 build-wheel.ps1 构建 CPython wheel
-src/lib.rs      pyo3 边界：App / StackPanel / Grid / Label / Button
+src/lib.rs      pyo3 边界：App / 容器 / 9 种 widget 的 pyclass
 src/model.rs    声明期数据模型、节点注册表、运行时 sender 表
 src/widget.rs   AnyWidget：所有组件的统一 Component 实现（自动 start/update）
 src/root.rs     PyRoot：窗口、动态子组件 fan-in、布局、事件分发
 src/layout.rs   measure/arrange 两遍布局引擎（含单测）
 python/         Python 包（加载构建出的 _pywinio.pyd）
-examples/       counter.py
+examples/       counter.py、gallery.py
 docs/           设计草案与截图
 ```

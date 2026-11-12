@@ -40,7 +40,7 @@ PoC 已验证以下核心判断：
 
 | 类别 | 内容 |
 | --- | --- |
-| 组件 | `Button`、`Label` |
+| 组件 | `Button`、`Label`、`Edit`、`CheckBox`、`LinkLabel`、`Progress`、`TextBox`、`Slider`、`UpDownEdit` |
 | 布局 | `StackPanel`、`Grid`、任意嵌套 |
 | 交互 | `on_click` 回调；`text` / `visible` / `enabled` 运行时修改 |
 | 生命周期 | 窗口创建、显示、关闭，全部由 Rust 驱动 |
@@ -106,7 +106,7 @@ pub trait Component: Sized {
 
 ```
 ┌──────────────────────────── Python 侧 ────────────────────────────┐
-│  App / StackPanel / Grid / Label / Button  (pyo3 pyclass)         │
+│  App / StackPanel / Grid / 9 种 widget  (pyo3 pyclass)             │
 │  - 声明组件与初始属性                                              │
 │  - 持有回调 (Py<PyAny>)                                            │
 │  - setter: 改阴影属性 + Shared::post(cmd)                          │
@@ -152,11 +152,20 @@ pub enum Cmd {              // 父 → 子
     SetText(String),
     SetEnabled(bool),
     SetVisible(bool),
+    SetChecked(bool),       // CheckBox
+    SetUri(String),         // LinkLabel
+    SetPos(usize),          // Progress / Slider
+    SetMinimum(usize),      // Progress / Slider / UpDownEdit
+    SetMaximum(usize),
+    SetIndeterminate(bool), // Progress
+    SetValue(usize),        // UpDownEdit
+    SetStep(usize),         // UpDownEdit
     Raise(Evt),             // 内部：把原生事件转成输出事件
 }
 
 pub enum Evt {              // 子 → 根
-    Clicked(u64),
+    Clicked(u64),           // Button / CheckBox / LinkLabel
+    Changed(u64),           // Edit / Slider / UpDownEdit
     Closed,
     Resized,
 }
@@ -169,53 +178,87 @@ pub enum Msg {              // 根组件自己的消息
 
 - `Cmd` 不需要携带节点 id：每个 widget 有独立 channel，post 到哪个 sender 就是发给哪个节点。
 - `Evt` 带节点 id，因为根组件只收到一个汇聚流。
+- `Clicked` 对应 `on_click` 回调，`Changed` 对应 `on_change` 回调。
 
 ### 4.2 `AnyWidget`：一个枚举承载所有 widget
 
 ```rust
 pub enum AnyWidget {
-    Button { key: u64, child: Child<Button> },
-    Label  { child: Child<Label> },
+    Button { node: Arc<WidgetNode>, child: Child<Button> },
+    Label { child: Child<Label> },
+    Edit { node: Arc<WidgetNode>, child: Child<Edit> },
+    CheckBox { node: Arc<WidgetNode>, child: Child<CheckBox> },
+    LinkLabel { node: Arc<WidgetNode>, child: Child<LinkLabel> },
+    Progress { node: Arc<WidgetNode>, child: Child<Progress> },
+    TextBox { node: Arc<WidgetNode>, child: Child<TextBox> },
+    Slider { node: Arc<WidgetNode>, child: Child<Slider> },
+    UpDownEdit { node: Arc<WidgetNode>, child: Child<UpDownEdit> },
+}
+```
+
+`node` 只在需要读 id 或同步用户改动时保留；`Label` 没有事件，所以省略。
+
+| widget | 原生事件 | 输出 |
+| --- | --- | --- |
+| Button / CheckBox / LinkLabel | Click | `Evt::Clicked(key)` |
+| Edit / Slider / UpDownEdit | Change | `Evt::Changed(key)` |
+| Label / Progress / TextBox | 无（空 Event 枚举） | — |
+| Window | Close / Resize | `Evt::Closed` / `Evt::Resized` |
+
+事件与更新的关键片段：
+
+```rust
+async fn start(&mut self, sender: &ComponentSender<Self>) -> ! {
+    match self {
+        Self::Button { node, child } => {
+            let key = node.key;
+            child.start(sender, move |event| match event {
+                ButtonEvent::Click => Some(Cmd::Raise(Evt::Clicked(key))),
+                _ => None,
+            }).await
+        }
+        Self::Edit { node, child } => {
+            let key = node.key;
+            child.start(sender, move |event| match event {
+                EditEvent::Change => Some(Cmd::Raise(Evt::Changed(key))),
+                _ => None,
+            }).await
+        }
+        Self::Label { child, .. } => child.start(sender, |_e: LabelEvent| None).await,
+        // Progress / TextBox 同理：空事件，只启动原生监听
+        // CheckBox / LinkLabel / Slider / UpDownEdit 分别映射 Click / Change
+        ..
+    }
 }
 
-impl Component for AnyWidget {
-    type Error = winio::Error;
-    type Event = Evt;
-    type Init<'a> = AnyInit<'a>;   // { node, parent: &'a Child<Window> }
-    type Message = Cmd;
-
-    async fn start(&mut self, sender: &ComponentSender<Self>) -> ! {
-        match self {
-            Self::Button { key, child } => {
-                let key = *key;
-                child.start(sender, move |event| match event {
-                    ButtonEvent::Click => Some(Cmd::Raise(Evt::Clicked(key))),
-                    _ => None,
-                }).await
-            }
-            Self::Label { child, .. } => child.start(sender, |_e: LabelEvent| None).await,
+async fn update(&mut self, cmd: Cmd, sender: &ComponentSender<Self>) -> Result<bool> {
+    match cmd {
+        Cmd::SetText(text) => { /* Button/Label/Edit/CheckBox/LinkLabel/TextBox */ Ok(true) }
+        Cmd::SetChecked(v) => { /* CheckBox */ Ok(true) }
+        Cmd::SetPos(v) => { /* Progress/Slider */ Ok(true) }
+        Cmd::SetValue(v) => { /* UpDownEdit */ Ok(true) }
+        Cmd::Raise(evt) => {
+            self.sync_props();          // 用户改动 → 阴影属性
+            sender.output(evt);         // 根组件收到 Evt
+            Ok(false)
         }
-    }
-
-    async fn update(&mut self, cmd: Cmd, sender: &ComponentSender<Self>) -> Result<bool> {
-        match cmd {
-            Cmd::SetText(text) => { self.set_text(&text)?; Ok(true) }
-            Cmd::SetEnabled(v) => { /* Button: set_enabled; Label: 忽略 */ Ok(false) }
-            Cmd::SetVisible(v) => { self.set_visible(v)?; Ok(true) }
-            Cmd::Raise(evt) => { sender.output(evt); Ok(false) }
-        }
+        ..
     }
 }
 ```
 
 **要点：**
 
-- `Child<Button>::start` 的 mapper 返回 `AnyWidget::Message = Cmd`，所以点击先变成
-  `Cmd::Raise(Evt::Clicked(key))` 投回自身；`update` 再 `sender.output(...)` 发给父组件。
-  这是 `Child::start` 类型签名决定的两跳。
-- `AnyWidget` 额外实现 `Failable` + `Layoutable`，逐 arm 委托给 `Child<Button>` / `Child<Label>`，
-  这样根组件可以对它调用 `preferred_size()` / `set_rect()`。
-- 只要新增 widget，就需要增加一个 enum variant 和对应 arm；PoC 用最直白的方式换取可读性。
+- `Child::start` 的 mapper 返回 `AnyWidget::Message = Cmd`，所以原生事件先变成
+  `Cmd::Raise(Evt::...)` 投回自身；`update` 再 `sender.output(...)` 发给父组件。
+- `AnyWidget` 额外实现 `Failable` + `Layoutable`，用 `dispatch_child!` 宏对 9 个 variant
+  逐个委托给 `Child<W>`，这样根组件可以直接 `preferred_size()` / `set_rect()`。
+- `sync_props` 在 `Cmd::Raise` 前把用户改动写回 `WidgetNode.props`：
+  `Edit` 文本、`CheckBox.checked`、`Slider.pos`、`UpDownEdit.value`，因此回调里读到新值。
+- `TextBox` 的 winio `TextBoxEvent` 为空，用户输入无法通知，`text` 只在 Python 设置时更新
+  （已知限制，见 §10）。
+- 新增 widget = 新 variant + init/start/update 分支 + Python class + 对应 `Cmd`；后续可用宏压缩。
+
 
 ### 4.2.1 备选方案：`into_boxed` + `BoxComponent`（未采用）
 
@@ -479,6 +522,18 @@ app.root = root
 app.run()
 ```
 
+新组件通过 `App` 工厂创建，再用通用 `add` 放进布局（完整示例见 `examples/gallery.py`）：
+
+```python
+edit = app.edit("name", "type here", on_change=refresh_status)
+check = app.check_box("opt", "enabled", checked=True, on_click=refresh_status)
+slider = app.slider("speed", pos=30, maximum=100, on_change=refresh_status)
+
+grid.add(edit, row=0, col=1)
+grid.add(check, row=1, col=1)
+grid.add(slider, row=2, col=1)
+```
+
 ### 6.2 API 表
 
 **App**
@@ -488,6 +543,13 @@ app.run()
 | `App(title, size=(720, 480))` | 创建应用；此时尚未创建窗口 |
 | `app.stack(orient="vertical", spacing=0.0, padding=0.0)` | 创建根/独立 StackPanel |
 | `app.grid(columns="", rows="", col_gap=0.0, row_gap=0.0, padding=0.0)` | 创建 Grid |
+| `app.edit(id, text="", *, on_change=None)` | 创建 Edit |
+| `app.check_box(id, text="", checked=False, *, on_click=None)` | 创建 CheckBox |
+| `app.link_label(id, text="", uri="", *, on_click=None)` | 创建 LinkLabel |
+| `app.progress(id, pos=0, minimum=0, maximum=100, indeterminate=False)` | 创建 Progress |
+| `app.text_box(id, text="")` | 创建 TextBox |
+| `app.slider(id, pos=0, minimum=0, maximum=100, *, on_change=None)` | 创建 Slider |
+| `app.up_down_edit(id, value=0, minimum=0, maximum=100, step=1, *, on_change=None)` | 创建 UpDownEdit |
 | `app.root = panel` | 指定根布局；必须在 `run()` 前 |
 | `app.run()` | 阻塞运行；释放 GIL；必须主线程调用 |
 | `app.quit()` | 请求关闭；可从其他线程调用 |
@@ -512,21 +574,32 @@ app.run()
 | `add_stack(orient=..., ..., *, row=0, col=0, ...)` | 嵌套容器 |
 | `rows` / `columns` | 轨道数量 |
 
-**Label / Button**
+**Widget 属性**
 
-| 成员 | Label | Button |
-| --- | --- | --- |
-| `id` | ✅ | ✅ |
-| `text` | ✅ get/set | ✅ get/set |
-| `visible` | ✅ get/set | ✅ get/set |
-| `enabled` | — | ✅ get/set |
-| `on_click` | — | ✅ get/set（可运行时替换） |
-| `__repr__` | ✅ | ✅ |
+工厂方法返回的 widget 通过 `container.add(widget, ...)` 加入布局（见 `examples/gallery.py`）。
+
+| 属性 | Button | Label | Edit | CheckBox | LinkLabel | Progress | TextBox | Slider | UpDownEdit |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `id` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `text` | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | — | — |
+| `visible` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `enabled` | ✅ | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `checked` | — | — | — | ✅ | — | — | — | — | — |
+| `uri` | — | — | — | — | ✅ | — | — | — | — |
+| `pos` | — | — | — | — | — | ✅ | — | ✅ | — |
+| `minimum` / `maximum` | — | — | — | — | — | ✅ | — | ✅ | ✅ |
+| `indeterminate` | — | — | — | — | — | ✅ | — | — | — |
+| `value` / `step` | — | — | — | — | — | — | — | — | ✅ |
+| `on_click` | ✅ | — | — | ✅ | ✅ | — | — | — | — |
+| `on_change` | — | — | ✅ | — | — | — | — | ✅ | ✅ |
+| `__repr__` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+
+所有属性均可在运行中读写；setter 会投递 `Cmd`，回调中读到的阴影属性已由 `sync_props` 同步。
 
 ### 6.3 语义约定
 
 - **预注册**：所有组件必须在 `run()` 前创建并挂到布局树；`run()` 之后新增布局不会被创建。
-- **回调零参数**：`on_click()` 不传事件对象；需要区分来源时用闭包捕获句柄（见示例）。
+- **回调零参数**：`on_click()` / `on_change()` 不传事件对象；需要区分来源时用闭包捕获句柄（见示例）。
 - **回调线程**：始终在 UI 线程执行；回调里可直接读写其他句柄。
 - **异常**：回调抛出的 Python 异常由 `PyErr::print` 打印，不终止 UI 循环。
 - **句柄跨线程**：属性 setter / `quit()` 是线程安全的投递；`run()` 自身必须主线程。
@@ -583,7 +656,7 @@ Python 主线程                          UI 线程（同一个 OS 线程）
 | 阶段 | 检查 | Python 异常 |
 | --- | --- | --- |
 | 构造 | size 必须为正 | `ValueError` |
-| `add` | 子对象类型必须为 Label/Button/StackPanel/Grid | `TypeError` |
+| `add` | 子对象必须是已支持的 widget 或 StackPanel/Grid | `TypeError` |
 | `add` | Grid 越界 | `ValueError` |
 | `add` | 容器不能包含自身 | `ValueError` |
 | `run` | 未设置 `app.root` | `RuntimeError` |
@@ -647,23 +720,31 @@ pywinio-0.1.0.dist-info/RECORD
 
 ### 9.2 真实窗口
 
-运行 `examples/counter.py`，窗口标题正确，布局如截图：
+运行 `examples/gallery.py`，9 种 widget 全部创建成功，截图如下：
+
+![gallery](images/gallery.png)
+
+运行 `examples/counter.py` 验证布局/回调链路：
 
 ![counter](images/counter.png)
 
 ### 9.3 事件链路
 
-用 Win32 `BM_CLICK` 模拟点击（避免人工操作）：
+用 Win32 消息模拟用户操作（避免人工交互）：
 
-```text
-before:      pywinio — declarative Python UI on winio || 0 clicks || The labels are updated...
-after +1:    pywinio — 1 click(s) so far                || 1 clicks || ...
-after +1:    pywinio — 2 click(s) so far                || 2 clicks || ...
-after reset: pywinio — declarative Python UI on winio   || 0 clicks || ...
-```
-
-证明：原生事件 → `Evt` → Python 回调 → `label.text` setter → `Cmd` → 原生控件刷新 →
-重新布局，全链路成立。
+- **Button**：`BM_CLICK` 两次 `+1`、一次 `Reset`，原生 Static 文本依次为
+  `1 clicks` / `2 clicks` / `0 clicks`，header 同步更新。
+- **Edit**：向 Edit 发送 `WM_SETTEXT`，状态标签变为 `edit='typed'`，证明
+  `EditEvent::Change` → `Evt::Changed` → `on_change` → `sync_props` 生效。
+- **CheckBox**：`BM_CLICK` 后原生 `BM_GETCHECK` 从 1 变 0，回调中的 `check.checked`
+  已是 `False`。
+- **LinkLabel**：向 Static 发送 `WM_LBUTTONDOWN/UP`，`links` 从 0 变 1，`on_click` 触发。
+- **Slider**：`TBM_SETPOS` 设为 80 后，向 winio 内层窗口发送 `WM_HSCROLL`，
+  状态标签变为 `slider=80`。注意消息要发给
+  `WinioWindowVersion…` 子窗口（widget 的真正 parent），而不是顶层标题栏窗口。
+- **Progress**：初始 `PBM_GETPOS=35`，点击 `Progress +10` 后为 45，状态标签同步。
+- **UpDownEdit**：初始值 5 在回调状态中可见；用户点击/输入走 winio 的
+  `WM_COMMAND(EN_CHANGE)` 路径。
 
 ### 9.4 其他路径
 
@@ -680,7 +761,8 @@ after reset: pywinio — declarative Python UI on winio   || 0 clicks || ...
 
 ## 10. 已知限制（按严重度）
 
-1. **组件覆盖少**：仅 Button/Label；其余 widget 需要扩展 `AnyWidget` 与 `Cmd`。
+1. **其余 widget 未支持**：ComboBox、ListBox、TabView、ScrollView、Picture、Canvas、菜单/对话框等
+   仍需扩展 `AnyWidget` 与 `Cmd`。
 2. **布局语义不完整**：无 min/max/shrink/RTL/自动放置；见 §5.5。复杂界面可能溢出或裁剪。
 3. **全量重排**：任何子组件更新都重建 measure/arrange；组件多时可能掉帧。
 4. **无属性绑定**：只能命令式 setter；没有 `Prop`/observable 集成。
@@ -694,6 +776,14 @@ after reset: pywinio — declarative Python UI on winio   || 0 clicks || ...
 11. **布局树在 run 后仍可被 Python 修改**（`Arc` + `Mutex`），但 UI 线程只读取快照语义，
     结果未定义；应在文档/运行时禁止。
 12. **`Label.enabled` 未暴露**（winio `Label` 本身不实现 `Enable`）。
+13. **TextBox 用户输入不可观测**：winio 0.13 的 `TextBoxEvent` 为空，用户键入不会触发回调，
+    `text` 只在 Python setter 时更新；Edit 则通过 `Change` 事件正常同步。
+14. **LinkLabel 的 `uri` 语义**：`uri` 非空时点击由系统打开链接，且 winio 不再触发 `Click`，
+    因此 `on_click` 不会执行。
+15. **Slider 程序化赋值可能回调**：winio 的 `set_pos` 使用 `TBM_SETPOSNOTIFY`，
+    设置 `slider.pos` 可能触发一次 `on_change`；回调里不要无条件再次设置 `pos`，避免自激。
+16. **UpDownEdit 初值读取**：原生 up-down 控件未就绪时 `value()` 可能失败，
+    `sync_props` 会保留旧阴影值（不会崩溃）。
 
 ---
 
@@ -701,8 +791,8 @@ after reset: pywinio — declarative Python UI on winio   || 0 clicks || ...
 
 ### 11.1 v0.2：组件与交互
 
-- 扩展 widget：`CheckBox`、`Edit`、`ComboBox`、`Progress`、`Slider`、`ScrollView`、`TabView`。
-- 每个 widget 一套 `Cmd` 变体（或 `Cmd::Widget(WidgetCmd)` 分组），保持 `AnyWidget` 单枚举。
+- 扩展 widget：`ComboBox`、`ListBox`、`TabView`、`ScrollView`、`Picture`、`Canvas`、菜单与对话框。
+- 每个新 widget 加一个 `AnyWidget` variant + `Cmd` 变体；数量继续增长时可用宏生成。
 - 回调携带事件对象：`on_click(event)`；至少提供 `node_id`、可选坐标/键状态。
 - `App.start()` 非阻塞 + `App.wait()`，便于和 asyncio/线程结合。
 - 属性级绑定：把 winio 的 `Prop`/`bind` 暴露为 Python 可观察对象（注意 GIL 成本与合并）。
@@ -758,7 +848,7 @@ Cargo.toml            cdylib + pyo3 0.30 + winio 0.13（win32）
 pyproject.toml        maturin / PEP 621 元数据（mixed Rust/Python 布局）
 build.ps1             构建并把 DLL 拷成 python/pywinio/_pywinio.pyd
 build-wheel.ps1       构建 CPython wheel（target/wheels）
-src/lib.rs            pyclass：App / StackPanel / Grid / Label / Button；参数解析与校验
+src/lib.rs            pyclass：App / 容器 / 9 种 widget；参数解析与校验
 src/model.rs          WidgetNode、LayoutSpec、Track、Shared/AppRuntime、collect_widgets
 src/widget.rs         AnyWidget（统一 Component 实现）、Cmd/Evt
 src/root.rs           PyRoot（窗口、fan-in、重排、回调分发）、run_app

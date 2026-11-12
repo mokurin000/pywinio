@@ -156,7 +156,11 @@ impl Component for PyRoot {
             }
             Msg::Event(Evt::Resized) => Ok(true),
             Msg::Event(Evt::Clicked(key)) => {
-                self.invoke_click(key);
+                self.invoke(key, true);
+                Ok(false)
+            }
+            Msg::Event(Evt::Changed(key)) => {
+                self.invoke(key, false);
                 Ok(false)
             }
         }
@@ -197,13 +201,17 @@ impl PyRoot {
     /// Run the Python callback registered for `key`, if any.
     ///
     /// A Python exception is printed and does not tear down the UI loop.
-    fn invoke_click(&self, key: u64) {
+    fn invoke(&self, key: u64, click: bool) {
         let Some(node) = self.nodes.get(&key) else {
             return;
         };
         Python::attach(|py| {
-            let callback = node
-                .on_click
+            let slot = if click {
+                &node.on_click
+            } else {
+                &node.on_change
+            };
+            let callback = slot
                 .lock()
                 .unwrap()
                 .as_ref()

@@ -25,6 +25,13 @@ pub type LayoutKey = u64;
 pub enum WidgetKind {
     Button,
     Label,
+    Edit,
+    CheckBox,
+    LinkLabel,
+    Progress,
+    TextBox,
+    Slider,
+    UpDownEdit,
 }
 
 /// Properties mirrored on the Python side.
@@ -37,19 +44,46 @@ pub struct Props {
     pub text: String,
     pub enabled: bool,
     pub visible: bool,
+    pub checked: bool,
+    pub uri: String,
+    pub pos: usize,
+    pub minimum: usize,
+    pub maximum: usize,
+    pub indeterminate: bool,
+    pub value: usize,
+    pub step: usize,
+}
+
+impl Default for Props {
+    fn default() -> Self {
+        Self {
+            text: String::new(),
+            enabled: true,
+            visible: true,
+            checked: false,
+            uri: String::new(),
+            pos: 0,
+            minimum: 0,
+            maximum: 100,
+            indeterminate: false,
+            value: 0,
+            step: 1,
+        }
+    }
 }
 
 /// A pre-registered widget.
 ///
-/// Python holds one `Arc<WidgetNode>` per `Button`/`Label`, and so does the
-/// layout tree. The node itself is immutable except for its property shadow
-/// and its callback, both behind mutexes.
+/// Python holds one `Arc<WidgetNode>` per widget, and so does the layout tree.
+/// The node itself is immutable except for its property shadow and its
+/// callbacks, both behind mutexes.
 pub struct WidgetNode {
     pub key: NodeKey,
     pub id: String,
     pub kind: WidgetKind,
     pub props: Mutex<Props>,
     pub on_click: Mutex<Option<Py<PyAny>>>,
+    pub on_change: Mutex<Option<Py<PyAny>>>,
 }
 
 impl WidgetNode {
@@ -60,10 +94,10 @@ impl WidgetNode {
             kind,
             props: Mutex::new(Props {
                 text,
-                enabled: true,
-                visible: true,
+                ..Props::default()
             }),
             on_click: Mutex::new(None),
+            on_change: Mutex::new(None),
         }
     }
 

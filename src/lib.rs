@@ -135,6 +135,124 @@ impl PyApp {
         ))
     }
 
+    /// Create a single-line text input.
+    ///
+    /// Add it to a container with `container.add(edit, ...)`.
+    #[pyo3(signature = (id, text = "", *, on_change = None))]
+    fn edit(
+        &self,
+        py: Python<'_>,
+        id: &str,
+        text: &str,
+        on_change: Option<Py<PyAny>>,
+    ) -> PyResult<PyEdit> {
+        check_callback(py, &on_change, "on_change")?;
+        Ok(make_edit(&self.shared, id, text, on_change))
+    }
+
+    /// Create a check box.
+    #[pyo3(signature = (id, text = "", checked = false, *, on_click = None))]
+    fn check_box(
+        &self,
+        py: Python<'_>,
+        id: &str,
+        text: &str,
+        checked: bool,
+        on_click: Option<Py<PyAny>>,
+    ) -> PyResult<PyCheckBox> {
+        check_callback(py, &on_click, "on_click")?;
+        Ok(make_check_box(&self.shared, id, text, checked, on_click))
+    }
+
+    /// Create a hyperlink-style label.
+    ///
+    /// If `uri` is non-empty, clicking opens the URI and no `on_click`
+    /// callback is invoked (winio behavior).
+    #[pyo3(signature = (id, text = "", uri = "", *, on_click = None))]
+    fn link_label(
+        &self,
+        py: Python<'_>,
+        id: &str,
+        text: &str,
+        uri: &str,
+        on_click: Option<Py<PyAny>>,
+    ) -> PyResult<PyLinkLabel> {
+        check_callback(py, &on_click, "on_click")?;
+        Ok(make_link_label(&self.shared, id, text, uri, on_click))
+    }
+
+    /// Create a progress bar.
+    #[pyo3(signature = (id, pos = 0, minimum = 0, maximum = 100, indeterminate = false))]
+    fn progress(
+        &self,
+        id: &str,
+        pos: usize,
+        minimum: usize,
+        maximum: usize,
+        indeterminate: bool,
+    ) -> PyResult<PyProgress> {
+        Ok(make_progress(
+            &self.shared,
+            id,
+            pos,
+            minimum,
+            maximum,
+            indeterminate,
+        ))
+    }
+
+    /// Create a multi-line text input.
+    #[pyo3(signature = (id, text = ""))]
+    fn text_box(&self, id: &str, text: &str) -> PyResult<PyTextBox> {
+        Ok(make_text_box(&self.shared, id, text))
+    }
+
+    /// Create a slider.
+    #[pyo3(signature = (id, pos = 0, minimum = 0, maximum = 100, *, on_change = None))]
+    fn slider(
+        &self,
+        py: Python<'_>,
+        id: &str,
+        pos: usize,
+        minimum: usize,
+        maximum: usize,
+        on_change: Option<Py<PyAny>>,
+    ) -> PyResult<PySlider> {
+        check_callback(py, &on_change, "on_change")?;
+        Ok(make_slider(
+            &self.shared,
+            id,
+            pos,
+            minimum,
+            maximum,
+            on_change,
+        ))
+    }
+
+    /// Create an integer input with up/down buttons.
+    #[pyo3(signature = (id, value = 0, minimum = 0, maximum = 100, step = 1, *, on_change = None))]
+    fn up_down_edit(
+        &self,
+        py: Python<'_>,
+        id: &str,
+        value: usize,
+        minimum: usize,
+        maximum: usize,
+        step: usize,
+        on_change: Option<Py<PyAny>>,
+    ) -> PyResult<PyUpDownEdit> {
+        check_callback(py, &on_change, "on_change")?;
+        Ok(make_up_down_edit(
+            &self.shared,
+            id,
+            value,
+            minimum,
+            maximum,
+            step,
+            on_change,
+        ))
+    }
+
     /// The root layout container. Must be set before `run()`.
     #[setter]
     fn set_root(&mut self, node: &Bound<'_, PyAny>) -> PyResult<()> {
@@ -517,6 +635,607 @@ impl PyButton {
     }
 }
 
+/// A single-line text input.
+#[pyclass(name = "Edit")]
+pub struct PyEdit {
+    shared: Arc<Shared>,
+    node: Arc<WidgetNode>,
+}
+
+#[pymethods]
+impl PyEdit {
+    #[getter]
+    fn id(&self) -> &str {
+        &self.node.id
+    }
+
+    #[getter]
+    fn text(&self) -> String {
+        self.node.props().text
+    }
+
+    #[setter]
+    fn set_text(&self, text: String) {
+        set_text_prop(&self.node, &self.shared, text);
+    }
+
+    #[getter]
+    fn visible(&self) -> bool {
+        self.node.props().visible
+    }
+
+    #[setter]
+    fn set_visible(&self, visible: bool) {
+        set_visible_prop(&self.node, &self.shared, visible);
+    }
+
+    #[getter]
+    fn enabled(&self) -> bool {
+        self.node.props().enabled
+    }
+
+    #[setter]
+    fn set_enabled(&self, enabled: bool) {
+        set_enabled_prop(&self.node, &self.shared, enabled);
+    }
+
+    #[getter]
+    fn on_change(&self, py: Python<'_>) -> Option<Py<PyAny>> {
+        get_callback(&self.node.on_change, py)
+    }
+
+    #[setter]
+    fn set_on_change(&self, py: Python<'_>, callback: Option<Py<PyAny>>) -> PyResult<()> {
+        set_callback(&self.node.on_change, py, callback, "on_change")
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "<Edit {:?} text={:?}>",
+            self.node.id,
+            self.node.props().text
+        )
+    }
+}
+
+/// A check box.
+#[pyclass(name = "CheckBox")]
+pub struct PyCheckBox {
+    shared: Arc<Shared>,
+    node: Arc<WidgetNode>,
+}
+
+#[pymethods]
+impl PyCheckBox {
+    #[getter]
+    fn id(&self) -> &str {
+        &self.node.id
+    }
+
+    #[getter]
+    fn text(&self) -> String {
+        self.node.props().text
+    }
+
+    #[setter]
+    fn set_text(&self, text: String) {
+        set_text_prop(&self.node, &self.shared, text);
+    }
+
+    #[getter]
+    fn checked(&self) -> bool {
+        self.node.props().checked
+    }
+
+    #[setter]
+    fn set_checked(&self, checked: bool) {
+        self.node.props.lock().unwrap().checked = checked;
+        self.shared.post(self.node.key, Cmd::SetChecked(checked));
+    }
+
+    #[getter]
+    fn visible(&self) -> bool {
+        self.node.props().visible
+    }
+
+    #[setter]
+    fn set_visible(&self, visible: bool) {
+        set_visible_prop(&self.node, &self.shared, visible);
+    }
+
+    #[getter]
+    fn enabled(&self) -> bool {
+        self.node.props().enabled
+    }
+
+    #[setter]
+    fn set_enabled(&self, enabled: bool) {
+        set_enabled_prop(&self.node, &self.shared, enabled);
+    }
+
+    #[getter]
+    fn on_click(&self, py: Python<'_>) -> Option<Py<PyAny>> {
+        get_callback(&self.node.on_click, py)
+    }
+
+    #[setter]
+    fn set_on_click(&self, py: Python<'_>, callback: Option<Py<PyAny>>) -> PyResult<()> {
+        set_callback(&self.node.on_click, py, callback, "on_click")
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "<CheckBox {:?} text={:?} checked={}>",
+            self.node.id,
+            self.node.props().text,
+            self.node.props().checked
+        )
+    }
+}
+
+/// A hyperlink-style label.
+#[pyclass(name = "LinkLabel")]
+pub struct PyLinkLabel {
+    shared: Arc<Shared>,
+    node: Arc<WidgetNode>,
+}
+
+#[pymethods]
+impl PyLinkLabel {
+    #[getter]
+    fn id(&self) -> &str {
+        &self.node.id
+    }
+
+    #[getter]
+    fn text(&self) -> String {
+        self.node.props().text
+    }
+
+    #[setter]
+    fn set_text(&self, text: String) {
+        set_text_prop(&self.node, &self.shared, text);
+    }
+
+    #[getter]
+    fn uri(&self) -> String {
+        self.node.props().uri
+    }
+
+    #[setter]
+    fn set_uri(&self, uri: String) {
+        self.node.props.lock().unwrap().uri = uri.clone();
+        self.shared.post(self.node.key, Cmd::SetUri(uri));
+    }
+
+    #[getter]
+    fn visible(&self) -> bool {
+        self.node.props().visible
+    }
+
+    #[setter]
+    fn set_visible(&self, visible: bool) {
+        set_visible_prop(&self.node, &self.shared, visible);
+    }
+
+    #[getter]
+    fn enabled(&self) -> bool {
+        self.node.props().enabled
+    }
+
+    #[setter]
+    fn set_enabled(&self, enabled: bool) {
+        set_enabled_prop(&self.node, &self.shared, enabled);
+    }
+
+    #[getter]
+    fn on_click(&self, py: Python<'_>) -> Option<Py<PyAny>> {
+        get_callback(&self.node.on_click, py)
+    }
+
+    #[setter]
+    fn set_on_click(&self, py: Python<'_>, callback: Option<Py<PyAny>>) -> PyResult<()> {
+        set_callback(&self.node.on_click, py, callback, "on_click")
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "<LinkLabel {:?} text={:?} uri={:?}>",
+            self.node.id,
+            self.node.props().text,
+            self.node.props().uri
+        )
+    }
+}
+
+/// A progress bar.
+#[pyclass(name = "Progress")]
+pub struct PyProgress {
+    shared: Arc<Shared>,
+    node: Arc<WidgetNode>,
+}
+
+#[pymethods]
+impl PyProgress {
+    #[getter]
+    fn id(&self) -> &str {
+        &self.node.id
+    }
+
+    #[getter]
+    fn pos(&self) -> usize {
+        self.node.props().pos
+    }
+
+    #[setter]
+    fn set_pos(&self, pos: usize) {
+        set_pos_prop(&self.node, &self.shared, pos, |key| Cmd::SetPos(key));
+    }
+
+    #[getter]
+    fn minimum(&self) -> usize {
+        self.node.props().minimum
+    }
+
+    #[setter]
+    fn set_minimum(&self, minimum: usize) {
+        self.node.props.lock().unwrap().minimum = minimum;
+        self.shared.post(self.node.key, Cmd::SetMinimum(minimum));
+    }
+
+    #[getter]
+    fn maximum(&self) -> usize {
+        self.node.props().maximum
+    }
+
+    #[setter]
+    fn set_maximum(&self, maximum: usize) {
+        self.node.props.lock().unwrap().maximum = maximum;
+        self.shared.post(self.node.key, Cmd::SetMaximum(maximum));
+    }
+
+    #[getter]
+    fn indeterminate(&self) -> bool {
+        self.node.props().indeterminate
+    }
+
+    #[setter]
+    fn set_indeterminate(&self, indeterminate: bool) {
+        self.node.props.lock().unwrap().indeterminate = indeterminate;
+        self.shared
+            .post(self.node.key, Cmd::SetIndeterminate(indeterminate));
+    }
+
+    #[getter]
+    fn visible(&self) -> bool {
+        self.node.props().visible
+    }
+
+    #[setter]
+    fn set_visible(&self, visible: bool) {
+        set_visible_prop(&self.node, &self.shared, visible);
+    }
+
+    #[getter]
+    fn enabled(&self) -> bool {
+        self.node.props().enabled
+    }
+
+    #[setter]
+    fn set_enabled(&self, enabled: bool) {
+        set_enabled_prop(&self.node, &self.shared, enabled);
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "<Progress {:?} pos={} min={} max={}>",
+            self.node.id,
+            self.node.props().pos,
+            self.node.props().minimum,
+            self.node.props().maximum
+        )
+    }
+}
+
+/// A multi-line text input.
+#[pyclass(name = "TextBox")]
+pub struct PyTextBox {
+    shared: Arc<Shared>,
+    node: Arc<WidgetNode>,
+}
+
+#[pymethods]
+impl PyTextBox {
+    #[getter]
+    fn id(&self) -> &str {
+        &self.node.id
+    }
+
+    #[getter]
+    fn text(&self) -> String {
+        self.node.props().text
+    }
+
+    #[setter]
+    fn set_text(&self, text: String) {
+        set_text_prop(&self.node, &self.shared, text);
+    }
+
+    #[getter]
+    fn visible(&self) -> bool {
+        self.node.props().visible
+    }
+
+    #[setter]
+    fn set_visible(&self, visible: bool) {
+        set_visible_prop(&self.node, &self.shared, visible);
+    }
+
+    #[getter]
+    fn enabled(&self) -> bool {
+        self.node.props().enabled
+    }
+
+    #[setter]
+    fn set_enabled(&self, enabled: bool) {
+        set_enabled_prop(&self.node, &self.shared, enabled);
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "<TextBox {:?} text={:?}>",
+            self.node.id,
+            self.node.props().text
+        )
+    }
+}
+
+/// A slider.
+#[pyclass(name = "Slider")]
+pub struct PySlider {
+    shared: Arc<Shared>,
+    node: Arc<WidgetNode>,
+}
+
+#[pymethods]
+impl PySlider {
+    #[getter]
+    fn id(&self) -> &str {
+        &self.node.id
+    }
+
+    #[getter]
+    fn pos(&self) -> usize {
+        self.node.props().pos
+    }
+
+    #[setter]
+    fn set_pos(&self, pos: usize) {
+        set_pos_prop(&self.node, &self.shared, pos, Cmd::SetPos);
+    }
+
+    #[getter]
+    fn minimum(&self) -> usize {
+        self.node.props().minimum
+    }
+
+    #[setter]
+    fn set_minimum(&self, minimum: usize) {
+        self.node.props.lock().unwrap().minimum = minimum;
+        self.shared.post(self.node.key, Cmd::SetMinimum(minimum));
+    }
+
+    #[getter]
+    fn maximum(&self) -> usize {
+        self.node.props().maximum
+    }
+
+    #[setter]
+    fn set_maximum(&self, maximum: usize) {
+        self.node.props.lock().unwrap().maximum = maximum;
+        self.shared.post(self.node.key, Cmd::SetMaximum(maximum));
+    }
+
+    #[getter]
+    fn visible(&self) -> bool {
+        self.node.props().visible
+    }
+
+    #[setter]
+    fn set_visible(&self, visible: bool) {
+        set_visible_prop(&self.node, &self.shared, visible);
+    }
+
+    #[getter]
+    fn enabled(&self) -> bool {
+        self.node.props().enabled
+    }
+
+    #[setter]
+    fn set_enabled(&self, enabled: bool) {
+        set_enabled_prop(&self.node, &self.shared, enabled);
+    }
+
+    #[getter]
+    fn on_change(&self, py: Python<'_>) -> Option<Py<PyAny>> {
+        get_callback(&self.node.on_change, py)
+    }
+
+    #[setter]
+    fn set_on_change(&self, py: Python<'_>, callback: Option<Py<PyAny>>) -> PyResult<()> {
+        set_callback(&self.node.on_change, py, callback, "on_change")
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "<Slider {:?} pos={} min={} max={}>",
+            self.node.id,
+            self.node.props().pos,
+            self.node.props().minimum,
+            self.node.props().maximum
+        )
+    }
+}
+
+/// An integer input with up/down buttons.
+#[pyclass(name = "UpDownEdit")]
+pub struct PyUpDownEdit {
+    shared: Arc<Shared>,
+    node: Arc<WidgetNode>,
+}
+
+#[pymethods]
+impl PyUpDownEdit {
+    #[getter]
+    fn id(&self) -> &str {
+        &self.node.id
+    }
+
+    #[getter]
+    fn value(&self) -> usize {
+        self.node.props().value
+    }
+
+    #[setter]
+    fn set_value(&self, value: usize) {
+        set_pos_prop(&self.node, &self.shared, value, Cmd::SetValue);
+    }
+
+    #[getter]
+    fn minimum(&self) -> usize {
+        self.node.props().minimum
+    }
+
+    #[setter]
+    fn set_minimum(&self, minimum: usize) {
+        self.node.props.lock().unwrap().minimum = minimum;
+        self.shared.post(self.node.key, Cmd::SetMinimum(minimum));
+    }
+
+    #[getter]
+    fn maximum(&self) -> usize {
+        self.node.props().maximum
+    }
+
+    #[setter]
+    fn set_maximum(&self, maximum: usize) {
+        self.node.props.lock().unwrap().maximum = maximum;
+        self.shared.post(self.node.key, Cmd::SetMaximum(maximum));
+    }
+
+    #[getter]
+    fn step(&self) -> usize {
+        self.node.props().step
+    }
+
+    #[setter]
+    fn set_step(&self, step: usize) {
+        self.node.props.lock().unwrap().step = step;
+        self.shared.post(self.node.key, Cmd::SetStep(step));
+    }
+
+    #[getter]
+    fn visible(&self) -> bool {
+        self.node.props().visible
+    }
+
+    #[setter]
+    fn set_visible(&self, visible: bool) {
+        set_visible_prop(&self.node, &self.shared, visible);
+    }
+
+    #[getter]
+    fn enabled(&self) -> bool {
+        self.node.props().enabled
+    }
+
+    #[setter]
+    fn set_enabled(&self, enabled: bool) {
+        set_enabled_prop(&self.node, &self.shared, enabled);
+    }
+
+    #[getter]
+    fn on_change(&self, py: Python<'_>) -> Option<Py<PyAny>> {
+        get_callback(&self.node.on_change, py)
+    }
+
+    #[setter]
+    fn set_on_change(&self, py: Python<'_>, callback: Option<Py<PyAny>>) -> PyResult<()> {
+        set_callback(&self.node.on_change, py, callback, "on_change")
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "<UpDownEdit {:?} value={} min={} max={} step={}>",
+            self.node.id,
+            self.node.props().value,
+            self.node.props().minimum,
+            self.node.props().maximum,
+            self.node.props().step
+        )
+    }
+}
+
+fn set_text_prop(node: &Arc<WidgetNode>, shared: &Arc<Shared>, text: String) {
+    node.props.lock().unwrap().text = text.clone();
+    shared.post(node.key, Cmd::SetText(text));
+}
+
+fn set_visible_prop(node: &Arc<WidgetNode>, shared: &Arc<Shared>, visible: bool) {
+    node.props.lock().unwrap().visible = visible;
+    shared.post(node.key, Cmd::SetVisible(visible));
+}
+
+fn set_enabled_prop(node: &Arc<WidgetNode>, shared: &Arc<Shared>, enabled: bool) {
+    node.props.lock().unwrap().enabled = enabled;
+    shared.post(node.key, Cmd::SetEnabled(enabled));
+}
+
+fn set_pos_prop(
+    node: &Arc<WidgetNode>,
+    shared: &Arc<Shared>,
+    value: usize,
+    command: impl FnOnce(usize) -> Cmd,
+) {
+    let props = node.props();
+    let maximum = props.maximum.max(props.minimum);
+    let value = value.clamp(props.minimum, maximum);
+    let mut guard = node.props.lock().unwrap();
+    match node.kind {
+        WidgetKind::UpDownEdit => guard.value = value,
+        _ => guard.pos = value,
+    }
+    drop(guard);
+    shared.post(node.key, command(value));
+}
+
+fn get_callback(slot: &Mutex<Option<Py<PyAny>>>, py: Python<'_>) -> Option<Py<PyAny>> {
+    slot.lock()
+        .unwrap()
+        .as_ref()
+        .map(|callback| callback.clone_ref(py))
+}
+
+fn set_callback(
+    slot: &Mutex<Option<Py<PyAny>>>,
+    py: Python<'_>,
+    callback: Option<Py<PyAny>>,
+    name: &str,
+) -> PyResult<()> {
+    check_callback(py, &callback, name)?;
+    *slot.lock().unwrap() = callback;
+    Ok(())
+}
+
+fn check_callback(py: Python<'_>, callback: &Option<Py<PyAny>>, name: &str) -> PyResult<()> {
+    if let Some(callback) = callback
+        && !callback.bind(py).is_callable()
+    {
+        return Err(PyTypeError::new_err(format!("{name} must be callable")));
+    }
+    Ok(())
+}
+
 fn new_stack(shared: &Arc<Shared>, orient: Orient, spacing: f64, padding: f64) -> PyStackPanel {
     let key = shared.next_layout_key();
     PyStackPanel {
@@ -585,6 +1304,134 @@ fn make_button(
     })
 }
 
+fn make_node(shared: &Arc<Shared>, id: &str, kind: WidgetKind, text: &str) -> Arc<WidgetNode> {
+    Arc::new(WidgetNode::new(
+        shared.next_node_key(),
+        id.to_string(),
+        kind,
+        text.to_string(),
+    ))
+}
+
+fn make_edit(shared: &Arc<Shared>, id: &str, text: &str, on_change: Option<Py<PyAny>>) -> PyEdit {
+    let node = make_node(shared, id, WidgetKind::Edit, text);
+    *node.on_change.lock().unwrap() = on_change;
+    PyEdit {
+        shared: shared.clone(),
+        node,
+    }
+}
+
+fn make_check_box(
+    shared: &Arc<Shared>,
+    id: &str,
+    text: &str,
+    checked: bool,
+    on_click: Option<Py<PyAny>>,
+) -> PyCheckBox {
+    let node = make_node(shared, id, WidgetKind::CheckBox, text);
+    node.props.lock().unwrap().checked = checked;
+    *node.on_click.lock().unwrap() = on_click;
+    PyCheckBox {
+        shared: shared.clone(),
+        node,
+    }
+}
+
+fn make_link_label(
+    shared: &Arc<Shared>,
+    id: &str,
+    text: &str,
+    uri: &str,
+    on_click: Option<Py<PyAny>>,
+) -> PyLinkLabel {
+    let node = make_node(shared, id, WidgetKind::LinkLabel, text);
+    node.props.lock().unwrap().uri = uri.to_string();
+    *node.on_click.lock().unwrap() = on_click;
+    PyLinkLabel {
+        shared: shared.clone(),
+        node,
+    }
+}
+
+fn make_progress(
+    shared: &Arc<Shared>,
+    id: &str,
+    pos: usize,
+    minimum: usize,
+    maximum: usize,
+    indeterminate: bool,
+) -> PyProgress {
+    let node = make_node(shared, id, WidgetKind::Progress, "");
+    let maximum = maximum.max(minimum);
+    {
+        let mut props = node.props.lock().unwrap();
+        props.minimum = minimum;
+        props.maximum = maximum;
+        props.pos = pos.clamp(minimum, maximum);
+        props.indeterminate = indeterminate;
+    }
+    PyProgress {
+        shared: shared.clone(),
+        node,
+    }
+}
+
+fn make_text_box(shared: &Arc<Shared>, id: &str, text: &str) -> PyTextBox {
+    PyTextBox {
+        shared: shared.clone(),
+        node: make_node(shared, id, WidgetKind::TextBox, text),
+    }
+}
+
+fn make_slider(
+    shared: &Arc<Shared>,
+    id: &str,
+    pos: usize,
+    minimum: usize,
+    maximum: usize,
+    on_change: Option<Py<PyAny>>,
+) -> PySlider {
+    let node = make_node(shared, id, WidgetKind::Slider, "");
+    let maximum = maximum.max(minimum);
+    {
+        let mut props = node.props.lock().unwrap();
+        props.minimum = minimum;
+        props.maximum = maximum;
+        props.pos = pos.clamp(minimum, maximum);
+    }
+    *node.on_change.lock().unwrap() = on_change;
+    PySlider {
+        shared: shared.clone(),
+        node,
+    }
+}
+
+fn make_up_down_edit(
+    shared: &Arc<Shared>,
+    id: &str,
+    value: usize,
+    minimum: usize,
+    maximum: usize,
+    step: usize,
+    on_change: Option<Py<PyAny>>,
+) -> PyUpDownEdit {
+    let node = make_node(shared, id, WidgetKind::UpDownEdit, "");
+    let maximum = maximum.max(minimum);
+    {
+        let mut props = node.props.lock().unwrap();
+        props.minimum = minimum;
+        props.maximum = maximum;
+        props.step = step;
+        props.value = value.clamp(minimum, maximum);
+    }
+    *node.on_change.lock().unwrap() = on_change;
+    PyUpDownEdit {
+        shared: shared.clone(),
+        node,
+    }
+}
+
 fn item_opts(
     grow: bool,
     margin: Option<(f64, f64, f64, f64)>,
@@ -628,6 +1475,27 @@ fn extract_elem(child: &Bound<'_, PyAny>) -> PyResult<Elem> {
     if let Ok(button) = child.extract::<PyRef<'_, PyButton>>() {
         return Ok(Elem::Widget(button.node.clone()));
     }
+    if let Ok(edit) = child.extract::<PyRef<'_, PyEdit>>() {
+        return Ok(Elem::Widget(edit.node.clone()));
+    }
+    if let Ok(check_box) = child.extract::<PyRef<'_, PyCheckBox>>() {
+        return Ok(Elem::Widget(check_box.node.clone()));
+    }
+    if let Ok(link_label) = child.extract::<PyRef<'_, PyLinkLabel>>() {
+        return Ok(Elem::Widget(link_label.node.clone()));
+    }
+    if let Ok(progress) = child.extract::<PyRef<'_, PyProgress>>() {
+        return Ok(Elem::Widget(progress.node.clone()));
+    }
+    if let Ok(text_box) = child.extract::<PyRef<'_, PyTextBox>>() {
+        return Ok(Elem::Widget(text_box.node.clone()));
+    }
+    if let Ok(slider) = child.extract::<PyRef<'_, PySlider>>() {
+        return Ok(Elem::Widget(slider.node.clone()));
+    }
+    if let Ok(up_down) = child.extract::<PyRef<'_, PyUpDownEdit>>() {
+        return Ok(Elem::Widget(up_down.node.clone()));
+    }
     if let Ok(panel) = child.extract::<PyRef<'_, PyStackPanel>>() {
         return Ok(Elem::Panel(panel.layout.clone()));
     }
@@ -635,7 +1503,8 @@ fn extract_elem(child: &Bound<'_, PyAny>) -> PyResult<Elem> {
         return Ok(Elem::Panel(grid.layout.clone()));
     }
     Err(PyTypeError::new_err(
-        "expected a Label, Button, StackPanel or Grid",
+        "expected a Label, Button, Edit, CheckBox, LinkLabel, Progress, TextBox, Slider, \
+         UpDownEdit, StackPanel or Grid",
     ))
 }
 
@@ -711,6 +1580,13 @@ fn _pywinio(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<PyGrid>()?;
     module.add_class::<PyLabel>()?;
     module.add_class::<PyButton>()?;
+    module.add_class::<PyEdit>()?;
+    module.add_class::<PyCheckBox>()?;
+    module.add_class::<PyLinkLabel>()?;
+    module.add_class::<PyProgress>()?;
+    module.add_class::<PyTextBox>()?;
+    module.add_class::<PySlider>()?;
+    module.add_class::<PyUpDownEdit>()?;
     module.add("__version__", env!("CARGO_PKG_VERSION"))?;
     Ok(())
 }
