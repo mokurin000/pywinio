@@ -9,4 +9,6 @@
 /.tools/
 /.venv/
 /.wheel-test/
+/.uv-cache/
+/.uv-tools/
 

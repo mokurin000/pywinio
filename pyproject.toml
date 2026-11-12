@@ -4,9 +4,9 @@ build-backend = "maturin"
 
 [project]
 name = "pywinio"
-description = "Experimental PyO3 bindings for winio (Button/Label PoC)"
+description = "Experimental PyO3 bindings for winio (Buttons, inputs, layout PoC)"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dynamic = ["version"]
 classifiers = [
     "Programming Language :: Rust",

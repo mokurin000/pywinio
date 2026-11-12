@@ -52,7 +52,7 @@ PoC 已验证以下核心判断：
 - `webview`、`compio-compat`（按需求排除）。
 - 菜单、工具栏、对话框、多窗口。
 - 其余 widget（Edit、CheckBox、ComboBox、TabView、ScrollView、Progress…）。
-- abi3 / 多 Python 版本 wheel、类型存根、跨平台 CI（基础 maturin wheel 已提供，见 §9.1）。
+- abi3 / 多 Python 版本 wheel、跨平台 CI（基础 maturin wheel 与 `.pyi` 已提供，见 §9.1）。
 
 ### 1.3 非目标（设计上不承诺）
 
@@ -352,6 +352,9 @@ PyApp::run
 - **所有组件在窗口创建前就已“预注册”**（以纯数据 + 回调的形式），窗口初始化时按 DFS 顺序一次性创建原生控件。
 - sender 在 `PyRoot::init` 内发布到 `Shared`；Python 句柄在回调中即可 `post`。
 - `run()` 返回后 `Shared.runtime` 置空，句柄 setter 退化为只改阴影属性（避免向已销毁的组件投递）。
+- 为支持 `maturin generate-stubs`，`_pywinio` 使用 `#[pymodule] mod` 内联声明，
+  通过 `#[pymodule_export] use super::PyXxx` 导出 crate 根定义的 pyclass；
+  函数式 `#[pymodule] fn` 无法被 pyo3 内省完整描述。
 
 ### 4.5 重排策略
 
@@ -695,12 +698,17 @@ cargo test --offline --no-default-features
 margin + 居中对齐。测试二进制用 `--no-default-features` 关闭 `extension-module`，
 以便链接 libpython。
 
-### 9.1.1 Wheel 构建
+### 9.1.1 Wheel 构建与 `.pyi`
 
 maturin 1.16.0 + `pyproject.toml`（mixed Rust/Python 布局）：
 
 ```powershell
+# 由 #[pymethods] 内省生成 python/pywinio/_pywinio.pyi
+maturin generate-stubs --out python --interpreter python --offline
+
+# 普通 build 会把已提交的 stub 一起打进 wheel
 maturin build --release --offline
+# 或：.\build-wheel.ps1 -Offline（会先刷新 stub）
 # 📦 Built wheel ... target\wheels\pywinio-0.1.0-cp313-cp313-win_amd64.whl
 ```
 
@@ -709,14 +717,21 @@ wheel 内容：
 ```text
 pywinio/__init__.py
 pywinio/_pywinio.cp313-win_amd64.pyd
+pywinio/_pywinio.pyi
+pywinio/py.typed
 pywinio-0.1.0.dist-info/METADATA
 pywinio-0.1.0.dist-info/WHEEL
 pywinio-0.1.0.dist-info/RECORD
 ```
 
 把 wheel 解压到独立目录并 `PYTHONPATH` 指向它后，`import pywinio` 与
-`examples/counter.py` 均正常运行，说明 wheel 的包布局与扩展加载路径正确。
-也可直接用 `python -m pip install target\wheels\pywinio-*.whl` 安装。
+`examples/counter.py` 均正常运行；pyright 对 `_pywinio.pyi` 的检查为
+`0 errors`。
+
+> maturin 的内省只支持 `#[pymodule] mod` 内联模块。函数式 `#[pymodule] fn`
+> 会被标记为不完整（生成 `def __getattr__(name): ...`），无法得到完整 stub。
+> 因此 `_pywinio` 使用内联模块 + `#[pymodule_export] use super::PyXxx`，
+> 并在 `Cargo.toml` 打开 pyo3 的 `experimental-inspect` feature。
 
 ### 9.2 真实窗口
 
@@ -769,8 +784,8 @@ pywinio-0.1.0.dist-info/RECORD
 5. **回调无事件对象**：`on_click()` 零参；无法直接拿到点击坐标、键盘修饰键等。
 6. **不可达组件静默跳过**：无“已注册但未布局”的告警/校验。
 7. **无多窗口/菜单/对话框**：`Window` 只有一个，`MessageBox`/`FileBox` 未接入。
-8. **打包不完整**：已有 maturin wheel，但仍是 `cp313` 专用（未启用 abi3），
-   也还没有 `.pyi`、多版本 wheel 与跨平台打包。
+8. **打包限制**：wheel 仍是 `cp313` 专用（未启用 abi3），没有多版本 wheel 与跨平台打包；
+   `.pyi` 与 `py.typed` 已提供（由 maturin 内省生成，见 §9.1.1）。
 9. **仅 Windows 实测**：winio 的 GTK/Qt/AppKit 后端未验证；布局引擎本身平台无关。
 10. **回调异常只打印**：没有错误上报钩子，也不阻止后续回调。
 11. **布局树在 run 后仍可被 Python 修改**（`Arc` + `Mutex`），但 UI 线程只读取快照语义，
@@ -812,7 +827,7 @@ pywinio-0.1.0.dist-info/RECORD
 
 ### 11.3 v1.0：工程化
 
-- abi3 / 多 Python 版本 wheel；`pywinio.pyi`；Sphinx/mkdocs 文档。
+- abi3 / 多 Python 版本 wheel；Sphinx/mkdocs 文档。
 - 跨平台 CI（Windows win32 / Linux gtk / macOS app-kit）。
 - 运行时校验：所有已注册组件必须可达；重复/悬空引用告警。
 - API 稳定性与版本策略（跟随 winio 0.x 的 breaking change）。
@@ -844,17 +859,17 @@ pywinio-0.1.0.dist-info/RECORD
 ## 附录 A：文件结构
 
 ```
-Cargo.toml            cdylib + pyo3 0.30 + winio 0.13（win32）
+Cargo.toml            cdylib + pyo3 0.30（experimental-inspect）+ winio 0.13（win32）
 pyproject.toml        maturin / PEP 621 元数据（mixed Rust/Python 布局）
 build.ps1             构建并把 DLL 拷成 python/pywinio/_pywinio.pyd
-build-wheel.ps1       构建 CPython wheel（target/wheels）
+build-wheel.ps1       刷新 stub 并构建 CPython wheel（target/wheels）
 src/lib.rs            pyclass：App / 容器 / 9 种 widget；参数解析与校验
 src/model.rs          WidgetNode、LayoutSpec、Track、Shared/AppRuntime、collect_widgets
 src/widget.rs         AnyWidget（统一 Component 实现）、Cmd/Evt
 src/root.rs           PyRoot（窗口、fan-in、重排、回调分发）、run_app
 src/layout.rs         measure/arrange/validate + 7 个单测
-python/pywinio/       Python 包入口
-examples/counter.py   StackPanel + Grid 嵌套示例
+python/pywinio/       Python 包入口、_pywinio.pyi、py.typed
+examples/             counter.py、gallery.py
 docs/design.md        本文
 ```
 
@@ -870,4 +885,5 @@ docs/design.md        本文
 | 跨线程唤醒 | `src/model.rs` `Shared::wake`（`PostMessageW(WM_NULL)`） |
 | Python setter | `src/lib.rs` `PyLabel::set_text` 等 |
 | 校验 | `src/layout.rs` `validate`、`src/model.rs` `collect_widgets` |
+| 类型存根 | `maturin generate-stubs` → `python/pywinio/_pywinio.pyi` |
 | Wheel 构建 | `pyproject.toml`、`build-wheel.ps1` |

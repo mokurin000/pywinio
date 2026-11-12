@@ -14,7 +14,7 @@ default = ["extension-module"]
 extension-module = ["pyo3/extension-module"]
 
 [dependencies]
-pyo3 = "0.30.1"
+pyo3 = { version = "0.30.1", features = ["experimental-inspect"] }
 futures-util = "0.3"
 winio = { version = "0.13.0-beta.3", default-features = false, features = ["win32"] }
 

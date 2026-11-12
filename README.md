@@ -44,7 +44,8 @@ $env:PYWINIO_AUTOCLOSE_MS = "1500"; python .\examples\counter.py
 
 ```powershell
 .\build-wheel.ps1 -Offline
-# 等价于: maturin build --release --offline
+# 等价于: maturin generate-stubs --out python --interpreter python --offline
+#         maturin build --release --offline
 
 # 安装构建出的 wheel
 python -m pip install --force-reinstall target\wheels\pywinio-*.whl
@@ -52,6 +53,23 @@ python -m pip install --force-reinstall target\wheels\pywinio-*.whl
 
 wheel 标签跟随当前解释器（本机为 `cp313-cp313-win_amd64`），尚未启用 abi3。
 在虚拟环境中开发时，也可以用 `maturin develop` 直接安装到该环境。
+
+## 类型存根（`.pyi`）
+
+`#[pymethods]` 的签名由 maturin 的 pyo3 内省生成：
+
+```powershell
+maturin generate-stubs --out python --interpreter python
+```
+
+`build-wheel.ps1` 会先执行该命令刷新 `python/pywinio/_pywinio.pyi`，再构建 wheel；
+wheel 内同时包含 `_pywinio.pyi` 与 `py.typed`。pyright 对生成结果的检查为 0 errors。
+
+> 需要 `pyo3` 的 `experimental-inspect` feature（已在 `Cargo.toml` 打开），
+> 且扩展模块必须是 `#[pymodule] mod` 内联模块（当前已满足）。
+> 由于 stub 已提交，`maturin build --generate-stubs` 会报
+> “overwrote an existing tracked file”；请用 `build-wheel.ps1`，或先
+> `generate-stubs` 再普通 `maturin build`。
 
 ## API 速览
 
@@ -98,7 +116,7 @@ src/model.rs    声明期数据模型、节点注册表、运行时 sender 表
 src/widget.rs   AnyWidget：所有组件的统一 Component 实现（自动 start/update）
 src/root.rs     PyRoot：窗口、动态子组件 fan-in、布局、事件分发
 src/layout.rs   measure/arrange 两遍布局引擎（含单测）
-python/         Python 包（加载构建出的 _pywinio.pyd）
+python/         Python 包（加载构建出的 _pywinio.pyd）、_pywinio.pyi、py.typed
 examples/       counter.py、gallery.py
 docs/           设计草案与截图
 ```

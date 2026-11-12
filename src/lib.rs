@@ -77,6 +77,7 @@ pub struct PyApp {
     title: String,
     size: (f64, f64),
     layout: Mutex<Option<Arc<LayoutSpec>>>,
+    root_obj: Mutex<Option<Py<PyAny>>>,
     running: AtomicBool,
 }
 
@@ -95,6 +96,7 @@ impl PyApp {
             title,
             size,
             layout: Mutex::new(None),
+            root_obj: Mutex::new(None),
             running: AtomicBool::new(false),
         })
     }
@@ -254,10 +256,20 @@ impl PyApp {
     }
 
     /// The root layout container. Must be set before `run()`.
+    #[getter]
+    fn root(&self, py: Python<'_>) -> Option<Py<PyAny>> {
+        self.root_obj
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|root| root.clone_ref(py))
+    }
+
     #[setter]
     fn set_root(&mut self, node: &Bound<'_, PyAny>) -> PyResult<()> {
         let layout = extract_layout(node)?;
         *self.layout.lock().unwrap() = Some(layout);
+        *self.root_obj.lock().unwrap() = Some(node.clone().unbind());
         Ok(())
     }
 
@@ -1574,19 +1586,14 @@ fn parse_valign(value: &str) -> PyResult<VAlign> {
 }
 
 #[pymodule]
-fn _pywinio(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    module.add_class::<PyApp>()?;
-    module.add_class::<PyStackPanel>()?;
-    module.add_class::<PyGrid>()?;
-    module.add_class::<PyLabel>()?;
-    module.add_class::<PyButton>()?;
-    module.add_class::<PyEdit>()?;
-    module.add_class::<PyCheckBox>()?;
-    module.add_class::<PyLinkLabel>()?;
-    module.add_class::<PyProgress>()?;
-    module.add_class::<PyTextBox>()?;
-    module.add_class::<PySlider>()?;
-    module.add_class::<PyUpDownEdit>()?;
-    module.add("__version__", env!("CARGO_PKG_VERSION"))?;
-    Ok(())
+pub mod _pywinio {
+    #[pymodule_export]
+    use super::{
+        PyApp, PyButton, PyCheckBox, PyEdit, PyGrid, PyLabel, PyLinkLabel, PyProgress, PySlider,
+        PyStackPanel, PyTextBox, PyUpDownEdit,
+    };
+
+    #[pymodule_export]
+    #[allow(non_upper_case_globals)]
+    pub const __version__: &str = env!("CARGO_PKG_VERSION");
 }
