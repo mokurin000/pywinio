@@ -2,8 +2,8 @@
 
 pyo3 keeps annotations from ``#[pyo3(signature = (...))]`` as string literals,
 so maturin emits ``orient: "Literal['vertical', 'horizontal']"`` and does not
-import ``Literal``. Rewrite those annotations to real ``Literal[...]`` types and
-make sure ``typing.Literal`` is imported.
+import ``Literal``. Add ``typing.Literal`` so those quoted annotations resolve,
+while leaving pyo3's annotation text unchanged.
 
 Usage:
     python tools/postprocess_stubs.py [path/to/_pywinio.pyi]

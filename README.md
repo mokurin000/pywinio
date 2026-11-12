@@ -66,24 +66,6 @@ maturin generate-stubs --out python --interpreter python
 python tools/postprocess_stubs.py python/pywinio/_pywinio.pyi
 ```
 
-`build-wheel.ps1` 会先执行这两步刷新 `python/pywinio/_pywinio.pyi`，再构建 wheel；
-wheel 内同时包含 `_pywinio.pyi` 与 `py.typed`。pyright 对生成结果的检查为 0 errors。
-
-pyo3 会把 `#[pyo3(signature = (...))]` 里的注解当成字符串，maturin 会生成
-`orient: "Literal['vertical', 'horizontal']"` 且不导入 `Literal`；后处理脚本会把
-它们改成真正的 `Literal[...]` 并补上 import。最终 stub 中的布局参数为：
-
-```python
-def stack(..., orient: Literal["vertical", "horizontal"] = "vertical", ...) -> StackPanel: ...
-def add(..., halign: Literal["left", "center", "right", "stretch"] = "stretch",
-            valign: Literal["top", "center", "bottom", "stretch"] = "stretch", ...) -> None: ...
-```
-
-> 需要 `pyo3` 的 `experimental-inspect` feature（已在 `Cargo.toml` 打开），
-> 且扩展模块必须是 `#[pymodule] mod` 内联模块（当前已满足）。
-> 由于 stub 已提交，`maturin build --generate-stubs` 会报
-> “overwrote an existing tracked file”；请用 `build-wheel.ps1`，或先
-> `generate-stubs` 再普通 `maturin build`。
 
 ## API 速览
 
@@ -96,13 +78,15 @@ root = app.stack(orient="vertical", spacing=8, padding=16)
 counter = app.label("counter", "0 clicks")
 root.add(counter)
 
+
 def inc():
-    counter.text = "1 clicks"   # 运行时改属性 -> 投递命令 -> 重排
+    counter.text = "1 clicks"  # 运行时改属性 -> 投递命令 -> 重排
+
 
 root.add(app.button("inc", "+1", on_click=inc))
 
 app.root = root
-app.run()      # 阻塞；回调在 UI 线程执行
+app.run()  # 阻塞；回调在 UI 线程执行
 ```
 
 更完整的嵌套/Grid 示例见 [examples/counter.py](examples/counter.py)，
@@ -115,16 +99,18 @@ app.run()      # 阻塞；回调在 UI 线程执行
 
 ```python
 combo = app.combo_box("combo", ["alpha", "beta"], selected=0, on_select=refresh)
-listbox = app.list_box("list", ["one", "two"], selected=[0], multiple=True, on_select=refresh)
+listbox = app.list_box(
+    "list", ["one", "two"], selected=[0], multiple=True, on_select=refresh
+)
 radio = app.radio_button("radio", "choice", checked=True, on_click=refresh)
 
 scroll = app.scroll_view("scroll", hscroll=False, vscroll=True)
 content = app.stack(orient="vertical")
 content.add(app.label("row", "scrollable content"))
-scroll.set_content(content)          # 必须在 run() 前
+scroll.set_content(content)  # 必须在 run() 前
 grid.add(scroll, row=0, col=1, height=140)
 
-app.timer("tick", interval_ms=250, on_tick=on_tick)   # 不参与布局
+app.timer("tick", interval_ms=250, on_tick=on_tick)  # 不参与布局
 ```
 
 ## 设计文档
@@ -145,13 +131,15 @@ cargo test --offline --no-default-features
 ```
 pyproject.toml  maturin / PEP 621 元数据（mixed Rust/Python 布局）
 build-wheel.ps1 构建 CPython wheel
-src/lib.rs      pyo3 边界：App / 容器 / 14 种 widget 与 Timer 的 pyclass
+src/lib.rs      模块声明、AppError、pymodule 导出
+src/app.rs      App pyclass 与工厂方法
+src/widgets/    17 个 pyclass（每个文件一个类，含 App）+ support.rs
 src/model.rs    声明期数据模型、节点注册表、运行时 sender 表
 src/widget.rs   AnyWidget：所有组件的统一 Component 实现（自动 start/update）
 src/root.rs     PyRoot：窗口、动态子组件 fan-in、布局、事件分发
 src/layout.rs   measure/arrange 两遍布局引擎（含单测）
 python/         Python 包、_pywinio.pyi、py.typed
 examples/       counter.py、gallery.py
-tools/          postprocess_stubs.py（把 maturin 的 Literal 注解字符串改成真类型）
+tools/          postprocess_stubs.py（补 Literal import，不改写注解）
 docs/           设计草案与截图
 ```

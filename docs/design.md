@@ -129,7 +129,7 @@ pub trait Component: Sized {
 
 | 层 | 位置 | 职责 |
 | --- | --- | --- |
-| 声明层 | `python/` + `src/lib.rs` 的 pyclass | 建树、设初值、注册回调、改属性 |
+| 声明层 | `python/` + `src/widgets/` 的 pyclass | 建树、设初值、注册回调、改属性 |
 | 桥接层 | `src/model.rs`、`src/widget.rs` | Node/布局数据、`Cmd`/`Evt`、统一 `Component` |
 | 运行时层 | `src/root.rs`、`src/layout.rs` | 窗口、事件 fan-in、布局、回调分发 |
 
@@ -382,7 +382,7 @@ PyApp::run
 - sender 在 `PyRoot::init` 内发布到 `Shared`；Python 句柄在回调中即可 `post`。
 - `run()` 返回后 `Shared.runtime` 置空，句柄 setter 退化为只改阴影属性（避免向已销毁的组件投递）。
 - 为支持 `maturin generate-stubs`，`_pywinio` 使用 `#[pymodule] mod` 内联声明，
-  通过 `#[pymodule_export] use super::PyXxx` 导出 crate 根定义的 pyclass；
+  通过 `#[pymodule_export] use super::{App, Button, ...}` 导出 crate 根定义的 pyclass；
   函数式 `#[pymodule] fn` 无法被 pyo3 内省完整描述。
 
 ### 4.5 重排策略
@@ -800,14 +800,14 @@ maturin build --release --offline
 # 📦 Built wheel ... target\wheels\pywinio-0.1.0-cp313-cp313-win_amd64.whl
 ```
 
-后处理脚本把 pyo3 注解字符串（maturin 输出为
-`orient: "Literal['vertical', 'horizontal']"`，且不 import `Literal`）改成真正的
-`Literal[...]`，并在 `from typing import ...` 中补上 `Literal`：
+后处理脚本只补上 `from typing import Literal`，不改写 pyo3 的注解字符串
+（maturin 输出为 `orient: "Literal['vertical', 'horizontal']"`）。类型检查器会把
+带引号的注解当作前向引用解析：
 
 ```python
-def stack(self, /, orient: Literal["vertical", "horizontal"] = "vertical", ...) -> StackPanel: ...
-def add(self, /, child: Any, *, halign: Literal["left", "center", "right", "stretch"] = "stretch",
-        valign: Literal["top", "center", "bottom", "stretch"] = "stretch", ...) -> None: ...
+def stack(self, /, orient: "Literal['vertical', 'horizontal']" = "vertical", ...) -> StackPanel: ...
+def add(self, /, child: Any, *, halign: "Literal['left', 'center', 'right', 'stretch']" = "stretch",
+        valign: "Literal['top', 'center', 'bottom', 'stretch']" = "stretch", ...) -> None: ...
 ```
 
 wheel 内容：
@@ -976,13 +976,17 @@ pywinio-0.1.0.dist-info/RECORD
 Cargo.toml            cdylib + pyo3 0.30（experimental-inspect）+ winio 0.13（win32）
 pyproject.toml        maturin / PEP 621 元数据（mixed Rust/Python 布局）
 build-wheel.ps1       刷新 stub 并构建 CPython wheel（target/wheels）
-src/lib.rs            pyclass：App / 容器 / 14 种 widget 与 Timer；参数解析与校验
+src/lib.rs            模块声明、AppError、`#[pymodule]` 导出
+src/widgets/mod.rs    pyclass 模块声明与 `pub use`
+src/widgets/app.rs    App pyclass 与工厂方法
+src/widgets/support.rs 共享辅助：make_*、extract_*、parse_*、item_opts
+src/widgets/*.rs      Label/Button/.../Timer 等 16 个 widget pyclass
 src/model.rs          WidgetNode、LayoutSpec、Track、Shared/AppRuntime、collect_widgets
 src/widget.rs         AnyWidget（统一 Component 实现）、Cmd/Evt
 src/root.rs           PyRoot（窗口、fan-in、重排、回调分发）、run_app
 src/layout.rs         measure/arrange/validate + 7 个单测
 python/pywinio/       Python 包入口、_pywinio.pyi、py.typed
-tools/                postprocess_stubs.py（Literal 注解后处理）
+tools/                postprocess_stubs.py（补 Literal import）
 examples/             counter.py、gallery.py
 docs/design.md        本文
 ```
@@ -997,7 +1001,7 @@ docs/design.md        本文
 | 布局算法 | `src/layout.rs` `measure` / `arrange` |
 | 命令投递 | `src/model.rs` `Shared::post` |
 | 跨线程唤醒 | `src/model.rs` `Shared::wake`（`PostMessageW(WM_NULL)`） |
-| Python setter | `src/lib.rs` `PyLabel::set_text` 等 |
+| Python setter | `src/widgets/label.rs` `Label::set_text` 等 |
 | 校验 | `src/layout.rs` `validate`、`src/model.rs` `collect_widgets` |
 | 类型存根 | `maturin generate-stubs` → `python/pywinio/_pywinio.pyi` |
 | Wheel 构建 | `pyproject.toml`、`build-wheel.ps1` |

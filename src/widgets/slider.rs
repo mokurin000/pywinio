@@ -1,0 +1,92 @@
+use super::support::*;
+use crate::model::*;
+use crate::widget::Cmd;
+use pyo3::prelude::*;
+use std::sync::Arc;
+
+/// A slider.
+#[pyclass(name = "Slider")]
+pub struct Slider {
+    pub(crate) shared: Arc<Shared>,
+    pub(crate) node: Arc<WidgetNode>,
+}
+
+#[pymethods]
+impl Slider {
+    #[getter]
+    fn id(&self) -> &str {
+        &self.node.id
+    }
+
+    #[getter]
+    fn pos(&self) -> usize {
+        self.node.props().pos
+    }
+
+    #[setter]
+    fn set_pos(&self, pos: usize) {
+        set_pos_prop(&self.node, &self.shared, pos, Cmd::SetPos);
+    }
+
+    #[getter]
+    fn minimum(&self) -> usize {
+        self.node.props().minimum
+    }
+
+    #[setter]
+    fn set_minimum(&self, minimum: usize) {
+        self.node.props.lock().unwrap().minimum = minimum;
+        self.shared.post(self.node.key, Cmd::SetMinimum(minimum));
+    }
+
+    #[getter]
+    fn maximum(&self) -> usize {
+        self.node.props().maximum
+    }
+
+    #[setter]
+    fn set_maximum(&self, maximum: usize) {
+        self.node.props.lock().unwrap().maximum = maximum;
+        self.shared.post(self.node.key, Cmd::SetMaximum(maximum));
+    }
+
+    #[getter]
+    fn visible(&self) -> bool {
+        self.node.props().visible
+    }
+
+    #[setter]
+    fn set_visible(&self, visible: bool) {
+        set_visible_prop(&self.node, &self.shared, visible);
+    }
+
+    #[getter]
+    fn enabled(&self) -> bool {
+        self.node.props().enabled
+    }
+
+    #[setter]
+    fn set_enabled(&self, enabled: bool) {
+        set_enabled_prop(&self.node, &self.shared, enabled);
+    }
+
+    #[getter]
+    fn on_change(&self, py: Python<'_>) -> Option<Py<PyAny>> {
+        get_callback(&self.node.on_change, py)
+    }
+
+    #[setter]
+    fn set_on_change(&self, py: Python<'_>, callback: Option<Py<PyAny>>) -> PyResult<()> {
+        set_callback(&self.node.on_change, py, callback, "on_change")
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "<Slider {:?} pos={} min={} max={}>",
+            self.node.id,
+            self.node.props().pos,
+            self.node.props().minimum,
+            self.node.props().maximum
+        )
+    }
+}

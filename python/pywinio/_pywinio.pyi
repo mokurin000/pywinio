@@ -11,8 +11,8 @@ class App:
     The application object.
 
     Create it on the Python main thread, describe the UI, then call
-    [`run`](PyApp::run). `run` releases the GIL and blocks until the window is
-    closed (or [`quit`](PyApp::quit) is called).
+    [`run`](App::run). `run` releases the GIL and blocks until the window is
+    closed (or [`quit`](App::quit) is called).
     """
     def __new__(cls, /, title: str, size: tuple[SupportsFloat | SupportsIndex, SupportsFloat | SupportsIndex] = ...) -> App: ...
     def button(self, /, id: str, text: str, *, on_click: Any | None = None) -> Button:
