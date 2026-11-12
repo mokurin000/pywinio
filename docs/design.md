@@ -25,7 +25,9 @@ PoC 已验证以下核心判断：
    运行时递归构造“父 panel 持有子 panel”会遇到借用检查器/生命周期问题；
    PoC 改为自己实现 measure/arrange 两遍布局（纯函数、可单测），语义覆盖 StackPanel/Grid 的常用子集。
 5. **GIL 模型成立**。`App.run()` 用 `Python::detach` 释放 GIL 并阻塞在 winio 事件循环；
-   回调经 `Python::attach` 重新取 GIL；属性 setter 可从其他 Python 线程投递命令（已验证跨线程 `quit()`）。
+   回调经 `Python::attach` 重新取 GIL，且都运行在 winio 事件循环（UI 线程）内；
+   属性 setter / `quit()` 可从其他 Python 线程投递（channel + `PostMessage(WM_NULL)` 唤醒，
+   实测 2.51s 触发、2.52s 返回）。
 
 已用真实窗口验证：按钮点击 → Python 回调 → `label.text` 更新 → 原生控件刷新并重排；
 窗口缩放后重新布局；标题栏关闭与 `app.quit()` 都能正常退出。
@@ -42,6 +44,7 @@ PoC 已验证以下核心判断：
 | 布局 | `StackPanel`、`Grid`、任意嵌套 |
 | 交互 | `on_click` 回调；`text` / `visible` / `enabled` 运行时修改 |
 | 生命周期 | 窗口创建、显示、关闭，全部由 Rust 驱动 |
+| 打包 | maturin 构建 CPython wheel（mixed Rust/Python 布局） |
 | 平台 | Windows + winio `win32` 后端（已实测） |
 
 ### 1.2 明确不做（本版）
@@ -49,7 +52,7 @@ PoC 已验证以下核心判断：
 - `webview`、`compio-compat`（按需求排除）。
 - 菜单、工具栏、对话框、多窗口。
 - 其余 widget（Edit、CheckBox、ComboBox、TabView、ScrollView、Progress…）。
-- 打包（maturin/wheel/abi3）、类型存根、跨平台 CI。
+- abi3 / 多 Python 版本 wheel、类型存根、跨平台 CI（基础 maturin wheel 已提供，见 §9.1）。
 
 ### 1.3 非目标（设计上不承诺）
 
@@ -213,6 +216,24 @@ impl Component for AnyWidget {
 - `AnyWidget` 额外实现 `Failable` + `Layoutable`，逐 arm 委托给 `Child<Button>` / `Child<Label>`，
   这样根组件可以对它调用 `preferred_size()` / `set_rect()`。
 - 只要新增 widget，就需要增加一个 enum variant 和对应 arm；PoC 用最直白的方式换取可读性。
+
+### 4.2.1 备选方案：`into_boxed` + `BoxComponent`（未采用）
+
+原型中也验证过另一条路：为每个 widget 写适配器，用 `Child::into_boxed()` 统一成
+`HashMap<NodeKey, Child<BoxComponent<Cmd, Evt, Error>>>`。
+
+不采用的原因：
+
+- `BoxComponent` 只实现 `Component`，不实现 `Layoutable`；装箱后无法直接
+  `preferred_size()` / `set_rect()`。必须额外维护 preferred size 缓存，并用 `Cmd::SetRect`
+  命令下发矩形，布局链路更长。
+- 每个 widget 仍需要一个适配器（原生 `Message`/`Event` 类型不同），并没有消除样板代码，
+  只是把“枚举 + match”换成“多个 struct + 命令枚举”。
+- 枚举方案可以直接对 `Child<AnyWidget>` 调用 `Layoutable`，布局在 `render_children` 中同步完成，
+  对这个 PoC 更简单、更好调试。
+
+若后续 widget 数量增大、单枚举的 match 难以维护，可以再回到适配器 + `into_boxed`，
+届时配合宏生成适配器。
 
 ### 4.3 运行时子组件 fan-in
 
@@ -526,6 +547,7 @@ Python 主线程                          UI 线程（同一个 OS 线程）
      │                                       └─ 回调时 Python::attach
      │
      └─ 其他线程: label.text = ... ──► Channel<Cmd> ──► waker.wake()
+                                                    └─ PostMessage(hwnd, WM_NULL)
 ```
 
 - winio 是单线程运行时；`run()` 在 Python 主线程上阻塞，正好符合 Win32 消息循环的线程要求。
@@ -533,7 +555,10 @@ Python 主线程                          UI 线程（同一个 OS 线程）
 - `ComponentSender<T>` 内部是 `Arc<Mutex<Channel<T>>>`，`post()` 可从任意线程调用；
   `Channel::send` 会取走并 `wake()` 已注册的 waker。
 - win32 后端的 waker 是 `ApcWaker`：`GetCurrentThread` 的句柄 + `NtAlertThread`，
-  配合 `MsgWaitForMultipleObjectsEx(..., MWMO_ALERTABLE)`。已实测跨线程 `quit()` 能立即唤醒。
+  配合 `MsgWaitForMultipleObjectsEx(..., MWMO_ALERTABLE)`。实测仅依赖它时，
+  跨线程唤醒不够及时；因此 `Shared::post/quit` 在 post 之后额外
+  `PostMessageW(hwnd, WM_NULL, 0, 0)`，这是唤醒 Win32 消息循环的标准做法。
+  实测：定时器 2.51s 触发，`run()` 2.52s 返回。
 
 ### 7.2 GIL 与锁
 
@@ -548,7 +573,7 @@ Python 主线程                          UI 线程（同一个 OS 线程）
 | --- | --- |
 | 标题栏 × | `WindowEvent::Close` → `Msg::Event(Closed)` → `window.hide()` → `sender.output(Evt::Closed)` |
 | 按钮回调 `app.quit()` | `Shared::quit()` → `Msg::Quit` → 同上 |
-| 其他线程 `app.quit()` | 同上，经 waker 唤醒 |
+| 其他线程 `app.quit()` | 同上，经 `PostMessage` 唤醒 |
 | `App.run` 主循环 | 收到 `Evt::Closed` → 退出 `while` → drop `Root` → 销毁原生窗口 |
 
 ---
@@ -597,6 +622,29 @@ cargo test --offline --no-default-features
 margin + 居中对齐。测试二进制用 `--no-default-features` 关闭 `extension-module`，
 以便链接 libpython。
 
+### 9.1.1 Wheel 构建
+
+maturin 1.16.0 + `pyproject.toml`（mixed Rust/Python 布局）：
+
+```powershell
+maturin build --release --offline
+# 📦 Built wheel ... target\wheels\pywinio-0.1.0-cp313-cp313-win_amd64.whl
+```
+
+wheel 内容：
+
+```text
+pywinio/__init__.py
+pywinio/_pywinio.cp313-win_amd64.pyd
+pywinio-0.1.0.dist-info/METADATA
+pywinio-0.1.0.dist-info/WHEEL
+pywinio-0.1.0.dist-info/RECORD
+```
+
+把 wheel 解压到独立目录并 `PYTHONPATH` 指向它后，`import pywinio` 与
+`examples/counter.py` 均正常运行，说明 wheel 的包布局与扩展加载路径正确。
+也可直接用 `python -m pip install target\wheels\pywinio-*.whl` 安装。
+
 ### 9.2 真实窗口
 
 运行 `examples/counter.py`，窗口标题正确，布局如截图：
@@ -619,11 +667,12 @@ after reset: pywinio — declarative Python UI on winio   || 0 clicks || ...
 
 ### 9.4 其他路径
 
-- **窗口缩放**：720×480 → 900×620 后，Grid 第二列从 x≈368 移到 x≈458，说明 `Resize`
-  事件触发根组件 `render` → `render_children` → 重新布局。
+- **窗口缩放**：720×480 时 `+1` 客户区 x=368；缩放到 920×620 后 x=468，
+  与 `padding=16 + 权重列 + gap=16` 的计算一致，说明 `Resize` → 根组件 `render` →
+  `render_children` → 重新布局生效。
 - **WM_CLOSE**：`PostMessage(WM_CLOSE)` 后窗口句柄消失、`run()` 返回。
-- **跨线程 `quit()`**：`threading.Timer` 在 2s/12s 等多次验证均能唤醒并退出；
-  跨线程属性 setter 同理（channel + waker）。
+- **跨线程 `quit()`**：定时器 2.51s 触发，`run()` 2.52s 返回（`PostMessage` 唤醒生效）。
+- **跨线程 setter**：worker 线程在 1.2s 设置 `label.text`，2.8s 读取原生 Static 文本已是新值。
 - **注意**：示例里的 `threading.Timer` 必须设 `daemon = True`，否则 Python 解释器会等待
   定时器线程结束，表现为“窗口已关但进程不退出”——这是 Python 线程语义，不是绑定 bug。
 
@@ -638,7 +687,8 @@ after reset: pywinio — declarative Python UI on winio   || 0 clicks || ...
 5. **回调无事件对象**：`on_click()` 零参；无法直接拿到点击坐标、键盘修饰键等。
 6. **不可达组件静默跳过**：无“已注册但未布局”的告警/校验。
 7. **无多窗口/菜单/对话框**：`Window` 只有一个，`MessageBox`/`FileBox` 未接入。
-8. **打包缺失**：没有 maturin 配置、wheel、`.pyi`、abi3；当前靠 `PYTHONPATH` + 手动拷 DLL。
+8. **打包不完整**：已有 maturin wheel，但仍是 `cp313` 专用（未启用 abi3），
+   也还没有 `.pyi`、多版本 wheel 与跨平台打包。
 9. **仅 Windows 实测**：winio 的 GTK/Qt/AppKit 后端未验证；布局引擎本身平台无关。
 10. **回调异常只打印**：没有错误上报钩子，也不阻止后续回调。
 11. **布局树在 run 后仍可被 Python 修改**（`Arc` + `Mutex`），但 UI 线程只读取快照语义，
@@ -672,7 +722,7 @@ after reset: pywinio — declarative Python UI on winio   || 0 clicks || ...
 
 ### 11.3 v1.0：工程化
 
-- maturin + `abi3-py310` wheel；`pywinio.pyi`；Sphinx/mkdocs 文档。
+- abi3 / 多 Python 版本 wheel；`pywinio.pyi`；Sphinx/mkdocs 文档。
 - 跨平台 CI（Windows win32 / Linux gtk / macOS app-kit）。
 - 运行时校验：所有已注册组件必须可达；重复/悬空引用告警。
 - API 稳定性与版本策略（跟随 winio 0.x 的 breaking change）。
@@ -705,7 +755,9 @@ after reset: pywinio — declarative Python UI on winio   || 0 clicks || ...
 
 ```
 Cargo.toml            cdylib + pyo3 0.30 + winio 0.13（win32）
+pyproject.toml        maturin / PEP 621 元数据（mixed Rust/Python 布局）
 build.ps1             构建并把 DLL 拷成 python/pywinio/_pywinio.pyd
+build-wheel.ps1       构建 CPython wheel（target/wheels）
 src/lib.rs            pyclass：App / StackPanel / Grid / Label / Button；参数解析与校验
 src/model.rs          WidgetNode、LayoutSpec、Track、Shared/AppRuntime、collect_widgets
 src/widget.rs         AnyWidget（统一 Component 实现）、Cmd/Evt
@@ -725,5 +777,7 @@ docs/design.md        本文
 | 重排策略 | `src/root.rs` `render_children` / `relayout` |
 | 布局算法 | `src/layout.rs` `measure` / `arrange` |
 | 命令投递 | `src/model.rs` `Shared::post` |
+| 跨线程唤醒 | `src/model.rs` `Shared::wake`（`PostMessageW(WM_NULL)`） |
 | Python setter | `src/lib.rs` `PyLabel::set_text` 等 |
 | 校验 | `src/layout.rs` `validate`、`src/model.rs` `collect_widgets` |
+| Wheel 构建 | `pyproject.toml`、`build-wheel.ps1` |

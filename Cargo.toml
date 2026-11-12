@@ -14,8 +14,9 @@ default = ["extension-module"]
 extension-module = ["pyo3/extension-module"]
 
 [dependencies]
-futures-util = "0.3"
-winio = { version = "0.13.0-beta.3", default-features = false, features = [
-    "win32",
-] }
 pyo3 = "0.30.1"
+futures-util = "0.3"
+winio = { version = "0.13.0-beta.3", default-features = false, features = ["win32"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }

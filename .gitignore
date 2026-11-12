@@ -1,4 +1,12 @@
 /target
-/python/pywinio/_pywinio.pyd
+/python/pywinio/_pywinio*.pyd
 **/__pycache__/
 *.pyc
+*.dist-info
+
+# local tooling / scratch (maturin venv, wheel test dirs)
+/.tmp/
+/.tools/
+/.venv/
+/.wheel-test/
+

@@ -35,10 +35,23 @@ python .\examples\counter.py
 $env:PYWINIO_AUTOCLOSE_MS = "1500"; python .\examples\counter.py
 ```
 
-> `-Offline` 与 `vendor/` 是本机环境的权宜之计：这里的 cargo/git 的 schannel
-> TLS 栈无法连接 crates.io，所以 pyo3 以路径依赖方式内置。正常环境把
-> `Cargo.toml` 中的 `pyo3` 改为 `pyo3 = "0.30.1"`，并删除 `[patch.crates-io]`
-> 与 `vendor/` 即可。
+> 本机 cargo/git 的 schannel TLS 栈无法访问 crates.io，但依赖已预缓存，所以这里用
+> `-Offline` 构建；正常联网环境直接 `.\build.ps1` 即可。
+
+## 构建 CPython wheel
+
+需要 [maturin](https://maturin.rs/)（`python -m pip install maturin`）：
+
+```powershell
+.\build-wheel.ps1 -Offline
+# 等价于: maturin build --release --offline
+
+# 安装构建出的 wheel
+python -m pip install --force-reinstall target\wheels\pywinio-*.whl
+```
+
+wheel 标签跟随当前解释器（本机为 `cp313-cp313-win_amd64`），尚未启用 abi3。
+在虚拟环境中开发时，也可以用 `maturin develop` 直接安装到该环境。
 
 ## API 速览
 
@@ -77,6 +90,8 @@ cargo test --offline --no-default-features
 ## 仓库结构
 
 ```
+pyproject.toml  maturin / PEP 621 元数据（mixed Rust/Python 布局）
+build-wheel.ps1 构建 CPython wheel
 src/lib.rs      pyo3 边界：App / StackPanel / Grid / Label / Button
 src/model.rs    声明期数据模型、节点注册表、运行时 sender 表
 src/widget.rs   AnyWidget：所有组件的统一 Component 实现（自动 start/update）

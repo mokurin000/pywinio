@@ -1152,6 +1152,7 @@ version = "0.1.0"
 dependencies = [
  "futures-util",
  "pyo3",
+ "windows-sys 0.61.2",
  "winio",
 ]
 

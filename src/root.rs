@@ -86,6 +86,15 @@ impl Component for PyRoot {
             }
         }
 
+        // Publish the top-level HWND so `Shared::post` can wake the message
+        // loop when it is called from another thread.
+        #[cfg(windows)]
+        {
+            let hwnd = window.as_window().as_win32();
+            shared.set_window(hwnd as isize);
+        }
+        let _ = &shared;
+
         window.show()?;
 
         let nodes = node_specs
@@ -252,6 +261,7 @@ pub fn run_app(
             }
         }
 
+        shared.clear_window();
         *shared.runtime.lock().unwrap() = None;
         Ok::<(), String>(())
     })

@@ -5,7 +5,7 @@
 //! created and inspected from Python and then handed to the winio root
 //! component when `App.run()` is called.
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicIsize, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use pyo3::prelude::*;
@@ -330,6 +330,9 @@ pub struct AppRuntime {
 /// State shared between Python objects and the winio component tree.
 pub struct Shared {
     pub runtime: Mutex<Option<AppRuntime>>,
+    /// Native top-level window handle, used to wake the event loop when a
+    /// command is posted from another thread.
+    hwnd: AtomicIsize,
     next_node: AtomicU64,
     next_layout: AtomicU64,
 }
@@ -338,6 +341,7 @@ impl Shared {
     pub fn new() -> Self {
         Self {
             runtime: Mutex::new(None),
+            hwnd: AtomicIsize::new(0),
             next_node: AtomicU64::new(1),
             next_layout: AtomicU64::new(1),
         }
@@ -351,12 +355,42 @@ impl Shared {
         self.next_layout.fetch_add(1, Ordering::Relaxed)
     }
 
+    pub fn set_window(&self, hwnd: isize) {
+        self.hwnd.store(hwnd, Ordering::Relaxed);
+    }
+
+    pub fn clear_window(&self) {
+        self.hwnd.store(0, Ordering::Relaxed);
+    }
+
+    /// Wake a message loop blocked in `MsgWaitForMultipleObjectsEx`.
+    ///
+    /// The channel waker alone is not reliable on win32 when the post comes
+    /// from another thread; posting a no-op message to the top-level window is
+    /// the canonical way to wake the loop.
+    fn wake(&self) {
+        let hwnd = self.hwnd.load(Ordering::Relaxed);
+        if hwnd == 0 {
+            return;
+        }
+        #[cfg(windows)]
+        unsafe {
+            windows_sys::Win32::UI::WindowsAndMessaging::PostMessageW(
+                hwnd as windows_sys::Win32::Foundation::HWND,
+                windows_sys::Win32::UI::WindowsAndMessaging::WM_NULL,
+                0,
+                0,
+            );
+        }
+    }
+
     /// Post a command to a widget. No-op when the window is not running yet.
     pub fn post(&self, key: NodeKey, cmd: Cmd) {
         if let Some(rt) = self.runtime.lock().unwrap().as_ref()
             && let Some(sender) = rt.senders.get(&key)
         {
             sender.post(cmd);
+            self.wake();
         }
     }
 
@@ -366,6 +400,7 @@ impl Shared {
             && let Some(sender) = &rt.root
         {
             sender.post(Msg::Quit);
+            self.wake();
         }
     }
 }

@@ -1,0 +1,22 @@
+[build-system]
+requires = ["maturin>=1.7,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "pywinio"
+description = "Experimental PyO3 bindings for winio (Button/Label PoC)"
+readme = "README.md"
+requires-python = ">=3.9"
+dynamic = ["version"]
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Operating System :: Microsoft :: Windows",
+]
+
+[tool.maturin]
+# Mixed Rust/Python layout: `python/pywinio` is the Python package, the
+# extension is imported as `pywinio._pywinio`.
+python-source = "python"
+module-name = "pywinio._pywinio"
+features = ["extension-module"]
