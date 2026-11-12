@@ -19,8 +19,8 @@ use winio::prelude::*;
 
 use crate::AppError;
 use crate::layout;
-use crate::model::{AppRuntime, LayoutSpec, Shared, WidgetNode};
-use crate::widget::{AnyInit, AnyWidget, Evt};
+use crate::model::{AppRuntime, LayoutSpec, Shared, WidgetNode, WidgetPlan};
+use crate::widget::{AnyInit, AnyWidget, Evt, TimerInit, TimerWidget};
 
 /// Messages accepted by the root component.
 pub enum Msg {
@@ -29,10 +29,20 @@ pub enum Msg {
 }
 
 /// Everything the root component needs to materialize the Python tree.
+/// Everything the root component needs to materialize the Python tree.
+#[derive(Clone, Copy)]
+enum Callback {
+    Click,
+    Change,
+    Select,
+    Tick,
+}
+
 pub struct RootInit {
     pub shared: Arc<Shared>,
     pub layout: Arc<LayoutSpec>,
-    pub widgets: Vec<Arc<WidgetNode>>,
+    pub widgets: Vec<WidgetPlan>,
+    pub timers: Vec<Arc<WidgetNode>>,
     pub title: String,
     pub size: Size,
 }
@@ -41,6 +51,7 @@ pub struct PyRoot {
     window: Child<Window>,
     layout: Arc<LayoutSpec>,
     widgets: HashMap<u64, Child<AnyWidget>>,
+    timers: HashMap<u64, Child<TimerWidget>>,
     nodes: HashMap<u64, Arc<WidgetNode>>,
 }
 
@@ -57,7 +68,8 @@ impl Component for PyRoot {
         let RootInit {
             shared,
             layout,
-            widgets: node_specs,
+            widgets: plans,
+            timers: timer_specs,
             title,
             size,
         } = init;
@@ -66,14 +78,33 @@ impl Component for PyRoot {
         window.set_text(&title)?;
         window.set_size(size)?;
 
-        let mut widgets = HashMap::with_capacity(node_specs.len());
-        for node in &node_specs {
-            let child = Child::<AnyWidget>::init(AnyInit {
-                node: node.clone(),
-                parent: &window,
-            })
-            .await?;
+        let mut widgets: HashMap<u64, Child<AnyWidget>> = HashMap::with_capacity(plans.len());
+        for plan in &plans {
+            let node = plan.node.clone();
+            let child = {
+                let parent: BorrowedContainer<'_> = match plan.scroll_parent {
+                    Some(key) => widgets
+                        .get(&key)
+                        .and_then(|widget| widget.as_scroll_container())
+                        .ok_or_else(|| {
+                            AppError::layout(format!("missing ScrollView parent {key}"))
+                        })?,
+                    None => (&window).into(),
+                };
+                Child::<AnyWidget>::init(AnyInit {
+                    node: node.clone(),
+                    parent,
+                })
+                .await?
+            };
             widgets.insert(node.key, child);
+        }
+
+        let mut timers: HashMap<u64, Child<TimerWidget>> =
+            HashMap::with_capacity(timer_specs.len());
+        for node in &timer_specs {
+            let child = Child::<TimerWidget>::init(TimerInit { node: node.clone() }).await?;
+            timers.insert(node.key, child);
         }
 
         // Publish the per-widget senders so Python handles can post commands.
@@ -82,6 +113,9 @@ impl Component for PyRoot {
             if let Some(runtime) = guard.as_mut() {
                 for (key, child) in &widgets {
                     runtime.senders.insert(*key, child.sender().clone());
+                }
+                for (key, child) in &timers {
+                    runtime.timer_senders.insert(*key, child.sender().clone());
                 }
             }
         }
@@ -97,15 +131,17 @@ impl Component for PyRoot {
 
         window.show()?;
 
-        let nodes = node_specs
-            .into_iter()
-            .map(|node| (node.key, node))
+        let mut nodes: HashMap<u64, Arc<WidgetNode>> = plans
+            .iter()
+            .map(|plan| (plan.node.key, plan.node.clone()))
             .collect();
+        nodes.extend(timer_specs.iter().map(|node| (node.key, node.clone())));
 
         Ok(Self {
             window,
             layout,
             widgets,
+            timers,
             nodes,
         })
     }
@@ -130,6 +166,13 @@ impl Component for PyRoot {
             }));
         }
 
+        for timer in self.timers.values_mut() {
+            let timer_start = timer.start(sender, |event| Some(Msg::Event(event)));
+            futures.push(Box::pin(async move {
+                let _: Infallible = timer_start.await;
+            }));
+        }
+
         match futures_util::future::select_all(futures).await {
             ((), _, _) => unreachable!("component start futures never complete"),
         }
@@ -139,6 +182,9 @@ impl Component for PyRoot {
         let mut need_render = false;
         for child in self.widgets.values_mut() {
             need_render |= child.update().await?;
+        }
+        for timer in self.timers.values_mut() {
+            need_render |= timer.update().await?;
         }
         Ok(need_render)
     }
@@ -156,11 +202,19 @@ impl Component for PyRoot {
             }
             Msg::Event(Evt::Resized) => Ok(true),
             Msg::Event(Evt::Clicked(key)) => {
-                self.invoke(key, true);
+                self.invoke(key, Callback::Click);
                 Ok(false)
             }
             Msg::Event(Evt::Changed(key)) => {
-                self.invoke(key, false);
+                self.invoke(key, Callback::Change);
+                Ok(false)
+            }
+            Msg::Event(Evt::Selected(key)) => {
+                self.invoke(key, Callback::Select);
+                Ok(false)
+            }
+            Msg::Event(Evt::Ticked(key)) => {
+                self.invoke(key, Callback::Tick);
                 Ok(false)
             }
         }
@@ -195,21 +249,90 @@ impl PyRoot {
                 widget.set_rect(rect)?;
             }
         }
+        self.layout_scroll_contents()?;
+        Ok(())
+    }
+
+    /// Arrange the content panel of every `ScrollView` in its own coordinate
+    /// space, then refresh the native scroll ranges.
+    fn layout_scroll_contents(&mut self) -> std::result::Result<(), AppError> {
+        let scroll_keys: Vec<u64> = self
+            .widgets
+            .iter()
+            .filter(|(_, widget)| widget.as_scroll_container().is_some())
+            .map(|(key, _)| *key)
+            .collect();
+
+        for key in scroll_keys {
+            let content = self
+                .nodes
+                .get(&key)
+                .and_then(|node| node.scroll_content.lock().unwrap().clone());
+            let Some(content) = content else {
+                continue;
+            };
+
+            let viewport = self
+                .widgets
+                .get(&key)
+                .ok_or_else(|| AppError::layout(format!("unknown ScrollView {key}")))?
+                .rect()?;
+
+            let measured = layout::measure(&content, |child_key| {
+                let widget = self
+                    .widgets
+                    .get(&child_key)
+                    .ok_or_else(|| AppError::layout(format!("unknown widget node {child_key}")))?;
+                Ok(widget.preferred_size()?)
+            })?;
+            let preferred = measured
+                .panels
+                .get(&content.uid)
+                .copied()
+                .unwrap_or_else(Size::zero);
+
+            let props = self.nodes[&key].props();
+            let content_size = Size::new(
+                if props.hscroll {
+                    preferred.width.max(viewport.size.width)
+                } else {
+                    viewport.size.width
+                },
+                if props.vscroll {
+                    preferred.height.max(viewport.size.height)
+                } else {
+                    viewport.size.height
+                },
+            );
+            let rects =
+                layout::arrange(&content, Rect::new(Point::zero(), content_size), &measured)?;
+            for (child_key, rect) in rects {
+                if let Some(widget) = self.widgets.get_mut(&child_key) {
+                    widget.set_rect(rect)?;
+                }
+            }
+            // ScrollView computes its scroll range by enumerating child
+            // windows, so resize it again after placing the content.
+            if let Some(widget) = self.widgets.get_mut(&key) {
+                widget.set_size(viewport.size)?;
+            }
+        }
         Ok(())
     }
 
     /// Run the Python callback registered for `key`, if any.
     ///
     /// A Python exception is printed and does not tear down the UI loop.
-    fn invoke(&self, key: u64, click: bool) {
+    fn invoke(&self, key: u64, which: Callback) {
         let Some(node) = self.nodes.get(&key) else {
             return;
         };
         Python::attach(|py| {
-            let slot = if click {
-                &node.on_click
-            } else {
-                &node.on_change
+            let slot = match which {
+                Callback::Click => &node.on_click,
+                Callback::Change => &node.on_change,
+                Callback::Select => &node.on_select,
+                Callback::Tick => &node.on_tick,
             };
             let callback = slot
                 .lock()
@@ -232,7 +355,8 @@ impl PyRoot {
 pub fn run_app(
     shared: Arc<Shared>,
     layout: Arc<LayoutSpec>,
-    widgets: Vec<Arc<WidgetNode>>,
+    widgets: Vec<WidgetPlan>,
+    timers: Vec<Arc<WidgetNode>>,
     title: String,
     size: (f64, f64),
 ) -> std::result::Result<(), String> {
@@ -248,6 +372,7 @@ pub fn run_app(
             shared: shared.clone(),
             layout,
             widgets,
+            timers,
             title,
             size: Size::new(size.0, size.1),
         })

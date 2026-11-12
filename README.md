@@ -10,10 +10,10 @@
 
 ## 已实现
 
-- 组件：`Button`、`Label`、`Edit`、`CheckBox`、`LinkLabel`、`Progress`、`TextBox`、`Slider`、`UpDownEdit`
+- 组件：`Button`、`Label`、`Edit`、`CheckBox`、`LinkLabel`、`Progress`、`TextBox`、`Slider`、`UpDownEdit`、`ComboBox`、`RadioButton`、`ListBox`、`ScrollView`、`Timer`（headless）
 - 布局：`StackPanel`（横/竖、spacing、padding、grow、对齐）、`Grid`（固定/auto/权重轨道、跨行跨列、gap），可任意嵌套
 - 运行时：`label.text = ...`、`slider.pos = ...` 等属性修改会投递到 UI 线程并触发重排
-- 回调：`on_click=` / `on_change=` 注册，自动接到 winio 的 `start`/`update`
+- 回调：`on_click` / `on_change` / `on_select` / `on_tick` 注册，自动接到 winio 的 `start`/`update`
 - 关闭：标题栏关闭、`Close` 按钮回调 `app.quit()`、跨线程 `app.quit()` 均可用
 
 ## 快速开始（Windows）
@@ -93,6 +93,22 @@ app.run()      # 阻塞；回调在 UI 线程执行
 更完整的嵌套/Grid 示例见 [examples/counter.py](examples/counter.py)，
 全组件示例见 [examples/gallery.py](examples/gallery.py)。
 
+新增组件通过 `App` 工厂创建，再用通用 `add` 放入布局：
+
+```python
+combo = app.combo_box("combo", ["alpha", "beta"], selected=0, on_select=refresh)
+listbox = app.list_box("list", ["one", "two"], selected=[0], multiple=True, on_select=refresh)
+radio = app.radio_button("radio", "choice", checked=True, on_click=refresh)
+
+scroll = app.scroll_view("scroll", hscroll=False, vscroll=True)
+content = app.stack(orient="vertical")
+content.add_label("row", "scrollable content")
+scroll.set_content(content)          # 必须在 run() 前
+grid.add(scroll, row=0, col=1, height=140)
+
+app.timer("tick", interval_ms=250, on_tick=on_tick)   # 不参与布局
+```
+
 ## 设计文档
 
 架构、消息流、自动注册原理、布局算法、取舍与路线图：
@@ -111,7 +127,7 @@ cargo test --offline --no-default-features
 ```
 pyproject.toml  maturin / PEP 621 元数据（mixed Rust/Python 布局）
 build-wheel.ps1 构建 CPython wheel
-src/lib.rs      pyo3 边界：App / 容器 / 9 种 widget 的 pyclass
+src/lib.rs      pyo3 边界：App / 容器 / 14 种 widget 与 Timer 的 pyclass
 src/model.rs    声明期数据模型、节点注册表、运行时 sender 表
 src/widget.rs   AnyWidget：所有组件的统一 Component 实现（自动 start/update）
 src/root.rs     PyRoot：窗口、动态子组件 fan-in、布局、事件分发

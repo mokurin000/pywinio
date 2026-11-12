@@ -12,7 +12,7 @@ use pyo3::prelude::*;
 use winio::prelude::{ComponentSender, HAlign, Orient, VAlign};
 
 use crate::root::{Msg, PyRoot};
-use crate::widget::{AnyWidget, Cmd};
+use crate::widget::{AnyWidget, Cmd, TimerWidget};
 
 /// Identifier of a widget node, unique inside one [`Shared`].
 pub type NodeKey = u64;
@@ -32,6 +32,11 @@ pub enum WidgetKind {
     TextBox,
     Slider,
     UpDownEdit,
+    ComboBox,
+    RadioButton,
+    ListBox,
+    ScrollView,
+    Timer,
 }
 
 /// Properties mirrored on the Python side.
@@ -52,6 +57,14 @@ pub struct Props {
     pub indeterminate: bool,
     pub value: usize,
     pub step: usize,
+    pub items: Vec<String>,
+    pub selected: Option<usize>,
+    pub selected_indices: Vec<usize>,
+    pub multiple: bool,
+    pub editable: bool,
+    pub hscroll: bool,
+    pub vscroll: bool,
+    pub interval_ms: u64,
 }
 
 impl Default for Props {
@@ -68,6 +81,14 @@ impl Default for Props {
             indeterminate: false,
             value: 0,
             step: 1,
+            items: Vec::new(),
+            selected: None,
+            selected_indices: Vec::new(),
+            multiple: false,
+            editable: false,
+            hscroll: true,
+            vscroll: true,
+            interval_ms: 500,
         }
     }
 }
@@ -84,6 +105,9 @@ pub struct WidgetNode {
     pub props: Mutex<Props>,
     pub on_click: Mutex<Option<Py<PyAny>>>,
     pub on_change: Mutex<Option<Py<PyAny>>>,
+    pub on_select: Mutex<Option<Py<PyAny>>>,
+    pub on_tick: Mutex<Option<Py<PyAny>>>,
+    pub scroll_content: Mutex<Option<Arc<LayoutSpec>>>,
 }
 
 impl WidgetNode {
@@ -98,6 +122,9 @@ impl WidgetNode {
             }),
             on_click: Mutex::new(None),
             on_change: Mutex::new(None),
+            on_select: Mutex::new(None),
+            on_tick: Mutex::new(None),
+            scroll_content: Mutex::new(None),
         }
     }
 
@@ -311,21 +338,31 @@ impl LayoutSpec {
     }
 }
 
+/// One widget to materialize, plus the `ScrollView` it is parented to.
+#[derive(Clone)]
+pub struct WidgetPlan {
+    pub node: Arc<WidgetNode>,
+    pub scroll_parent: Option<NodeKey>,
+}
+
 /// Collect every widget referenced by the layout tree, in depth-first order.
 ///
 /// Rejects duplicate widget entries (one native widget cannot live in two
-/// places) and cycles in the container graph.
-pub fn collect_widgets(root: &Arc<LayoutSpec>) -> Result<Vec<Arc<WidgetNode>>, String> {
+/// places) and cycles in the container graph. Widgets inside a `ScrollView`
+/// content panel are collected after the scroll view and carry its key as
+/// `scroll_parent`.
+pub fn collect_widgets(root: &Arc<LayoutSpec>) -> Result<Vec<WidgetPlan>, String> {
     let mut widgets = Vec::new();
     let mut keys = std::collections::HashSet::new();
     let mut panels = std::collections::HashSet::new();
-    collect_inner(root, &mut widgets, &mut keys, &mut panels)?;
+    collect_inner(root, None, &mut widgets, &mut keys, &mut panels)?;
     Ok(widgets)
 }
 
 fn collect_inner(
     node: &Arc<LayoutSpec>,
-    widgets: &mut Vec<Arc<WidgetNode>>,
+    scroll_parent: Option<NodeKey>,
+    widgets: &mut Vec<WidgetPlan>,
     keys: &mut std::collections::HashSet<NodeKey>,
     panels: &mut std::collections::HashSet<LayoutKey>,
 ) -> Result<(), String> {
@@ -344,9 +381,17 @@ fn collect_inner(
                         w.id, w.key
                     ));
                 }
-                widgets.push(w.clone());
+                widgets.push(WidgetPlan {
+                    node: w.clone(),
+                    scroll_parent,
+                });
+                if w.kind == WidgetKind::ScrollView
+                    && let Some(content) = w.scroll_content.lock().unwrap().clone()
+                {
+                    collect_inner(&content, Some(w.key), widgets, keys, panels)?;
+                }
             }
-            Elem::Panel(p) => collect_inner(p, widgets, keys, panels)?,
+            Elem::Panel(p) => collect_inner(p, scroll_parent, widgets, keys, panels)?,
         }
     }
     Ok(())
@@ -357,6 +402,8 @@ fn collect_inner(
 pub struct AppRuntime {
     /// One sender per widget node, so Python can post commands directly.
     pub senders: std::collections::HashMap<NodeKey, ComponentSender<AnyWidget>>,
+    /// One sender per headless timer node.
+    pub timer_senders: std::collections::HashMap<NodeKey, ComponentSender<TimerWidget>>,
     /// The root component's sender, used by `App.quit()`.
     pub root: Option<ComponentSender<PyRoot>>,
 }
@@ -422,6 +469,16 @@ impl Shared {
     pub fn post(&self, key: NodeKey, cmd: Cmd) {
         if let Some(rt) = self.runtime.lock().unwrap().as_ref()
             && let Some(sender) = rt.senders.get(&key)
+        {
+            sender.post(cmd);
+            self.wake();
+        }
+    }
+
+    /// Post a command to a headless timer.
+    pub fn post_timer(&self, key: NodeKey, cmd: Cmd) {
+        if let Some(rt) = self.runtime.lock().unwrap().as_ref()
+            && let Some(sender) = rt.timer_senders.get(&key)
         {
             sender.post(cmd);
             self.wake();

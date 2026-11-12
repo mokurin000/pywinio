@@ -6,6 +6,7 @@
 //! with the component runtime directly.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use winio::prelude::*;
 
@@ -28,6 +29,13 @@ pub enum Cmd {
     SetIndeterminate(bool),
     SetValue(usize),
     SetStep(usize),
+    SetItems(Vec<String>),
+    SetSelection(Option<usize>),
+    SetSelectedIndices(Vec<usize>),
+    SetMultiple(bool),
+    SetEditable(bool),
+    SetHScroll(bool),
+    SetVScroll(bool),
     /// Internal: turn a native widget event into an output event.
     Raise(Evt),
 }
@@ -37,6 +45,8 @@ pub enum Cmd {
 pub enum Evt {
     Clicked(u64),
     Changed(u64),
+    Selected(u64),
+    Ticked(u64),
     Closed,
     Resized,
 }
@@ -44,7 +54,7 @@ pub enum Evt {
 /// Initialization data for one [`AnyWidget`].
 pub struct AnyInit<'a> {
     pub node: Arc<WidgetNode>,
-    pub parent: &'a Child<Window>,
+    pub parent: BorrowedContainer<'a>,
 }
 
 /// A heterogeneous, ELM-compatible wrapper around the supported widgets.
@@ -84,6 +94,21 @@ pub enum AnyWidget {
         node: Arc<WidgetNode>,
         child: Child<UpDownEdit>,
     },
+    ComboBox {
+        node: Arc<WidgetNode>,
+        child: Child<ComboBox>,
+    },
+    RadioButton {
+        node: Arc<WidgetNode>,
+        child: Child<RadioButton>,
+    },
+    ListBox {
+        node: Arc<WidgetNode>,
+        child: Child<ListBox>,
+    },
+    ScrollView {
+        child: Child<ScrollView>,
+    },
 }
 
 /// Expand to `$body` once per variant, binding the variant's `child` field.
@@ -99,6 +124,32 @@ macro_rules! dispatch_child {
             Self::TextBox { $child, .. } => $body,
             Self::Slider { $child, .. } => $body,
             Self::UpDownEdit { $child, .. } => $body,
+            Self::ComboBox { $child, .. } => $body,
+            Self::RadioButton { $child, .. } => $body,
+            Self::ListBox { $child, .. } => $body,
+            Self::ScrollView { $child, .. } => $body,
+        }
+    };
+}
+
+/// Same as `dispatch_child!`, but skipping `ScrollView` (it has no preferred
+/// size in winio 0.13).
+macro_rules! dispatch_preferred {
+    ($this:expr, $child:ident => $body:expr) => {
+        match $this {
+            Self::Button { $child, .. } => $body,
+            Self::Label { $child, .. } => $body,
+            Self::Edit { $child, .. } => $body,
+            Self::CheckBox { $child, .. } => $body,
+            Self::LinkLabel { $child, .. } => $body,
+            Self::Progress { $child, .. } => $body,
+            Self::TextBox { $child, .. } => $body,
+            Self::Slider { $child, .. } => $body,
+            Self::UpDownEdit { $child, .. } => $body,
+            Self::ComboBox { $child, .. } => $body,
+            Self::RadioButton { $child, .. } => $body,
+            Self::ListBox { $child, .. } => $body,
+            Self::ScrollView { .. } => Ok(Size::zero()),
         }
     };
 }
@@ -133,7 +184,41 @@ impl AnyWidget {
                     node.props.lock().unwrap().value = value;
                 }
             }
+            Self::ComboBox { node, child } => {
+                let mut props = node.props.lock().unwrap();
+                if let Ok(selection) = child.selection() {
+                    props.selected = selection;
+                }
+                if let Ok(text) = child.text() {
+                    props.text = text;
+                }
+            }
+            Self::RadioButton { node, child } => {
+                if let Ok(checked) = child.is_checked() {
+                    node.props.lock().unwrap().checked = checked;
+                }
+            }
+            Self::ListBox { node, child } => {
+                if let Ok(len) = child.len() {
+                    let mut selected = Vec::new();
+                    for i in 0..len {
+                        if child.is_selected(i).unwrap_or(false) {
+                            selected.push(i);
+                        }
+                    }
+                    node.props.lock().unwrap().selected_indices = selected;
+                }
+            }
             _ => {}
+        }
+    }
+
+    /// The native container used to parent widgets placed inside a
+    /// `ScrollView` content panel.
+    pub fn as_scroll_container(&self) -> Option<BorrowedContainer<'_>> {
+        match self {
+            Self::ScrollView { child, .. } => Some(child.as_container()),
+            _ => None,
         }
     }
 }
@@ -160,7 +245,7 @@ impl Layoutable for AnyWidget {
     }
 
     fn preferred_size(&self) -> Result<Size> {
-        dispatch_child!(self, child => child.preferred_size())
+        dispatch_preferred!(self, child => child.preferred_size())
     }
 }
 
@@ -254,6 +339,52 @@ impl Component for AnyWidget {
                 child.set_visible(props.visible)?;
                 Ok(Self::UpDownEdit { node, child })
             }
+            WidgetKind::ComboBox => {
+                let mut child = Child::<ComboBox>::init(parent).await?;
+                child.set_items(props.items.clone())?;
+                child.set_editable(props.editable)?;
+                if !props.text.is_empty() {
+                    child.set_text(&props.text)?;
+                }
+                if let Some(selected) = props.selected
+                    && selected < props.items.len()
+                {
+                    child.set_selection(selected)?;
+                }
+                child.set_enabled(props.enabled)?;
+                child.set_visible(props.visible)?;
+                Ok(Self::ComboBox { node, child })
+            }
+            WidgetKind::RadioButton => {
+                let mut child = Child::<RadioButton>::init(parent).await?;
+                child.set_text(&props.text)?;
+                child.set_checked(props.checked)?;
+                child.set_enabled(props.enabled)?;
+                child.set_visible(props.visible)?;
+                Ok(Self::RadioButton { node, child })
+            }
+            WidgetKind::ListBox => {
+                let mut child = Child::<ListBox>::init(parent).await?;
+                child.set_multiple(props.multiple)?;
+                child.set_items(props.items.clone())?;
+                for index in &props.selected_indices {
+                    if *index < props.items.len() {
+                        child.set_selected(*index, true)?;
+                    }
+                }
+                child.set_enabled(props.enabled)?;
+                child.set_visible(props.visible)?;
+                Ok(Self::ListBox { node, child })
+            }
+            WidgetKind::ScrollView => {
+                let mut child = Child::<ScrollView>::init(parent).await?;
+                child.set_hscroll(props.hscroll)?;
+                child.set_vscroll(props.vscroll)?;
+                child.set_enabled(props.enabled)?;
+                child.set_visible(props.visible)?;
+                Ok(Self::ScrollView { child })
+            }
+            WidgetKind::Timer => unreachable!("timers are not AnyWidgets"),
         }
     }
 
@@ -313,6 +444,37 @@ impl Component for AnyWidget {
                     })
                     .await
             }
+            Self::ComboBox { node, child } => {
+                let key = node.key;
+                child
+                    .start(sender, move |event| match event {
+                        ComboBoxEvent::Select => Some(Cmd::Raise(Evt::Selected(key))),
+                        ComboBoxEvent::Change => Some(Cmd::Raise(Evt::Changed(key))),
+                        _ => None,
+                    })
+                    .await
+            }
+            Self::RadioButton { node, child } => {
+                let key = node.key;
+                child
+                    .start(sender, move |event| match event {
+                        RadioButtonEvent::Click => Some(Cmd::Raise(Evt::Clicked(key))),
+                        _ => None,
+                    })
+                    .await
+            }
+            Self::ListBox { node, child } => {
+                let key = node.key;
+                child
+                    .start(sender, move |event| match event {
+                        ListBoxEvent::Select => Some(Cmd::Raise(Evt::Selected(key))),
+                        _ => None,
+                    })
+                    .await
+            }
+            Self::ScrollView { child, .. } => {
+                child.start(sender, |_event: ScrollViewEvent| None).await
+            }
             Self::Label { child, .. } => child.start(sender, |_event: LabelEvent| None).await,
             Self::Progress { child, .. } => child.start(sender, |_event: ProgressEvent| None).await,
             Self::TextBox { child, .. } => child.start(sender, |_event: TextBoxEvent| None).await,
@@ -337,6 +499,8 @@ impl Component for AnyWidget {
                     Self::CheckBox { child, .. } => child.set_text(&text)?,
                     Self::LinkLabel { child, .. } => child.set_text(&text)?,
                     Self::TextBox { child, .. } => child.set_text(&text)?,
+                    Self::ComboBox { child, .. } => child.set_text(&text)?,
+                    Self::RadioButton { child, .. } => child.set_text(&text)?,
                     _ => return Ok(false),
                 }
                 Ok(true)
@@ -351,6 +515,10 @@ impl Component for AnyWidget {
                     Self::TextBox { child, .. } => child.set_enabled(enabled)?,
                     Self::Slider { child, .. } => child.set_enabled(enabled)?,
                     Self::UpDownEdit { child, .. } => child.set_enabled(enabled)?,
+                    Self::ComboBox { child, .. } => child.set_enabled(enabled)?,
+                    Self::RadioButton { child, .. } => child.set_enabled(enabled)?,
+                    Self::ListBox { child, .. } => child.set_enabled(enabled)?,
+                    Self::ScrollView { child, .. } => child.set_enabled(enabled)?,
                     Self::Label { .. } => return Ok(false),
                 }
                 Ok(false)
@@ -360,12 +528,12 @@ impl Component for AnyWidget {
                 Ok(true)
             }
             Cmd::SetChecked(checked) => {
-                if let Self::CheckBox { child, .. } = self {
-                    child.set_checked(checked)?;
-                    Ok(true)
-                } else {
-                    Ok(false)
+                match self {
+                    Self::CheckBox { child, .. } => child.set_checked(checked)?,
+                    Self::RadioButton { child, .. } => child.set_checked(checked)?,
+                    _ => return Ok(false),
                 }
+                Ok(true)
             }
             Cmd::SetUri(uri) => {
                 if let Self::LinkLabel { child, .. } = self {
@@ -428,6 +596,67 @@ impl Component for AnyWidget {
                     Ok(false)
                 }
             }
+            Cmd::SetItems(items) => {
+                match self {
+                    Self::ComboBox { child, .. } => child.set_items(items)?,
+                    Self::ListBox { child, .. } => child.set_items(items)?,
+                    _ => return Ok(false),
+                }
+                Ok(true)
+            }
+            Cmd::SetSelection(selection) => {
+                if let Self::ComboBox { child, .. } = self {
+                    if let Some(index) = selection {
+                        child.set_selection(index)?;
+                    }
+                    Ok(true)
+                } else {
+                    Ok(false)
+                }
+            }
+            Cmd::SetSelectedIndices(selected) => {
+                if let Self::ListBox { child, .. } = self {
+                    let len = child.len()?;
+                    for index in 0..len {
+                        child.set_selected(index, selected.contains(&index))?;
+                    }
+                    Ok(true)
+                } else {
+                    Ok(false)
+                }
+            }
+            Cmd::SetMultiple(multiple) => {
+                if let Self::ListBox { child, .. } = self {
+                    child.set_multiple(multiple)?;
+                    Ok(true)
+                } else {
+                    Ok(false)
+                }
+            }
+            Cmd::SetEditable(editable) => {
+                if let Self::ComboBox { child, .. } = self {
+                    child.set_editable(editable)?;
+                    Ok(true)
+                } else {
+                    Ok(false)
+                }
+            }
+            Cmd::SetHScroll(hscroll) => {
+                if let Self::ScrollView { child, .. } = self {
+                    child.set_hscroll(hscroll)?;
+                    Ok(true)
+                } else {
+                    Ok(false)
+                }
+            }
+            Cmd::SetVScroll(vscroll) => {
+                if let Self::ScrollView { child, .. } = self {
+                    child.set_vscroll(vscroll)?;
+                    Ok(true)
+                } else {
+                    Ok(false)
+                }
+            }
             Cmd::Raise(event) => {
                 self.sync_props();
                 sender.output(event);
@@ -438,5 +667,71 @@ impl Component for AnyWidget {
 
     fn render_children(&mut self) -> Result<()> {
         dispatch_child!(self, child => child.render())
+    }
+}
+
+/// Initialization data for a headless [`TimerWidget`].
+pub struct TimerInit {
+    pub node: Arc<WidgetNode>,
+}
+
+/// A headless periodic timer. It has no parent window and never participates
+/// in layout.
+pub struct TimerWidget {
+    node: Arc<WidgetNode>,
+    child: Child<Timer>,
+}
+
+impl Component for TimerWidget {
+    type Error = Error;
+    type Event = Evt;
+    type Init<'a> = TimerInit;
+    type Message = Cmd;
+
+    async fn init(init: Self::Init<'_>, _sender: &ComponentSender<Self>) -> Result<Self> {
+        let props = init.node.props();
+        let interval = Duration::from_millis(props.interval_ms.max(1));
+        let mut child = Child::<Timer>::init(interval).await?;
+        child.set_enabled(props.enabled)?;
+        Ok(Self {
+            node: init.node,
+            child,
+        })
+    }
+
+    async fn start(&mut self, sender: &ComponentSender<Self>) -> ! {
+        let key = self.node.key;
+        self.child
+            .start(sender, move |event| match event {
+                TimerEvent::Tick => Some(Cmd::Raise(Evt::Ticked(key))),
+                _ => None,
+            })
+            .await
+    }
+
+    async fn update_children(&mut self) -> Result<bool> {
+        self.child.update().await
+    }
+
+    async fn update(
+        &mut self,
+        message: Self::Message,
+        sender: &ComponentSender<Self>,
+    ) -> Result<bool> {
+        match message {
+            Cmd::SetEnabled(enabled) => {
+                self.child.set_enabled(enabled)?;
+                Ok(false)
+            }
+            Cmd::Raise(event) => {
+                sender.output(event);
+                Ok(false)
+            }
+            _ => Ok(false),
+        }
+    }
+
+    fn render_children(&mut self) -> Result<()> {
+        self.child.render()
     }
 }

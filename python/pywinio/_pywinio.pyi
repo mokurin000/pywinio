@@ -1,6 +1,7 @@
+from _typeshed import SupportsGetItem
 from typing import Any, Final, SupportsFloat, SupportsIndex, final
 
-__all__ = ["__version__", "App", "Button", "CheckBox", "Edit", "Grid", "Label", "LinkLabel", "Progress", "Slider", "StackPanel", "TextBox", "UpDownEdit"]
+__all__ = ["__version__", "App", "Button", "CheckBox", "ComboBox", "Edit", "Grid", "Label", "LinkLabel", "ListBox", "Progress", "RadioButton", "ScrollView", "Slider", "StackPanel", "TextBox", "Timer", "UpDownEdit"]
 
 __version__: Final[str]
 
@@ -17,6 +18,10 @@ class App:
     def check_box(self, /, id: str, text: str = "", checked: bool = False, *, on_click: Any | None = None) -> CheckBox:
         """
         Create a check box.
+        """
+    def combo_box(self, /, id: str, items: SupportsGetItem[int, str], *, selected: SupportsIndex | None = None, text: str = "", editable: bool = False, on_select: Any | None = None, on_change: Any | None = None) -> ComboBox:
+        """
+        Create a combo box.
         """
     def edit(self, /, id: str, text: str = "", *, on_change: Any | None = None) -> Edit:
         """
@@ -38,6 +43,10 @@ class App:
         If `uri` is non-empty, clicking opens the URI and no `on_click`
         callback is invoked (winio behavior).
         """
+    def list_box(self, /, id: str, items: SupportsGetItem[int, str], *, selected: SupportsGetItem[int, SupportsIndex] | None = None, multiple: bool = False, on_select: Any | None = None) -> ListBox:
+        """
+        Create a list box.
+        """
     def progress(self, /, id: str, pos: SupportsIndex = 0, minimum: SupportsIndex = 0, maximum: SupportsIndex = 100, indeterminate: bool = False) -> Progress:
         """
         Create a progress bar.
@@ -47,6 +56,10 @@ class App:
         Ask the root component to close the window.
 
         Safe to call from another Python thread while `run()` is blocking.
+        """
+    def radio_button(self, /, id: str, text: str = "", checked: bool = False, *, on_click: Any | None = None) -> RadioButton:
+        """
+        Create a radio button.
         """
     @property
     def root(self, /) -> Any | None:
@@ -67,6 +80,10 @@ class App:
         """
         Whether the window loop is currently running.
         """
+    def scroll_view(self, /, id: str, *, hscroll: bool = True, vscroll: bool = True) -> ScrollView:
+        """
+        Create a scrollable container. Use `set_content(panel)` before `run()`.
+        """
     def slider(self, /, id: str, pos: SupportsIndex = 0, minimum: SupportsIndex = 0, maximum: SupportsIndex = 100, *, on_change: Any | None = None) -> Slider:
         """
         Create a slider.
@@ -78,6 +95,10 @@ class App:
     def text_box(self, /, id: str, text: str = "") -> TextBox:
         """
         Create a multi-line text input.
+        """
+    def timer(self, /, id: str, interval_ms: SupportsIndex = 500, *, on_tick: Any | None = None, enabled: bool = True) -> Timer:
+        """
+        Create a headless periodic timer. It is not added to the layout tree.
         """
     @property
     def title(self, /) -> str: ...
@@ -134,6 +155,47 @@ class CheckBox:
     def on_click(self, /) -> Any | None: ...
     @on_click.setter
     def on_click(self, /, callback: Any | None) -> None: ...
+    @property
+    def text(self, /) -> str: ...
+    @text.setter
+    def text(self, /, text: str) -> None: ...
+    @property
+    def visible(self, /) -> bool: ...
+    @visible.setter
+    def visible(self, /, visible: bool) -> None: ...
+
+@final
+class ComboBox:
+    """
+    A combo box.
+    """
+    def __repr__(self, /) -> str: ...
+    @property
+    def editable(self, /) -> bool: ...
+    @editable.setter
+    def editable(self, /, editable: bool) -> None: ...
+    @property
+    def enabled(self, /) -> bool: ...
+    @enabled.setter
+    def enabled(self, /, enabled: bool) -> None: ...
+    @property
+    def id(self, /) -> str: ...
+    @property
+    def items(self, /) -> list[str]: ...
+    @items.setter
+    def items(self, /, items: SupportsGetItem[int, str]) -> None: ...
+    @property
+    def on_change(self, /) -> Any | None: ...
+    @on_change.setter
+    def on_change(self, /, callback: Any | None) -> None: ...
+    @property
+    def on_select(self, /) -> Any | None: ...
+    @on_select.setter
+    def on_select(self, /, callback: Any | None) -> None: ...
+    @property
+    def selected(self, /) -> int | None: ...
+    @selected.setter
+    def selected(self, /, selected: SupportsIndex | None) -> None: ...
     @property
     def text(self, /) -> str: ...
     @text.setter
@@ -241,6 +303,39 @@ class LinkLabel:
     def visible(self, /, visible: bool) -> None: ...
 
 @final
+class ListBox:
+    """
+    A list box.
+    """
+    def __repr__(self, /) -> str: ...
+    @property
+    def enabled(self, /) -> bool: ...
+    @enabled.setter
+    def enabled(self, /, enabled: bool) -> None: ...
+    @property
+    def id(self, /) -> str: ...
+    @property
+    def items(self, /) -> list[str]: ...
+    @items.setter
+    def items(self, /, items: SupportsGetItem[int, str]) -> None: ...
+    @property
+    def multiple(self, /) -> bool: ...
+    @multiple.setter
+    def multiple(self, /, multiple: bool) -> None: ...
+    @property
+    def on_select(self, /) -> Any | None: ...
+    @on_select.setter
+    def on_select(self, /, callback: Any | None) -> None: ...
+    @property
+    def selected(self, /) -> list[int]: ...
+    @selected.setter
+    def selected(self, /, selected: SupportsGetItem[int, SupportsIndex]) -> None: ...
+    @property
+    def visible(self, /) -> bool: ...
+    @visible.setter
+    def visible(self, /, visible: bool) -> None: ...
+
+@final
 class Progress:
     """
     A progress bar.
@@ -272,6 +367,64 @@ class Progress:
     def visible(self, /) -> bool: ...
     @visible.setter
     def visible(self, /, visible: bool) -> None: ...
+
+@final
+class RadioButton:
+    """
+    A radio button.
+    """
+    def __repr__(self, /) -> str: ...
+    @property
+    def checked(self, /) -> bool: ...
+    @checked.setter
+    def checked(self, /, checked: bool) -> None: ...
+    @property
+    def enabled(self, /) -> bool: ...
+    @enabled.setter
+    def enabled(self, /, enabled: bool) -> None: ...
+    @property
+    def id(self, /) -> str: ...
+    @property
+    def on_click(self, /) -> Any | None: ...
+    @on_click.setter
+    def on_click(self, /, callback: Any | None) -> None: ...
+    @property
+    def text(self, /) -> str: ...
+    @text.setter
+    def text(self, /, text: str) -> None: ...
+    @property
+    def visible(self, /) -> bool: ...
+    @visible.setter
+    def visible(self, /, visible: bool) -> None: ...
+
+@final
+class ScrollView:
+    """
+    A scrollable container.
+    """
+    def __repr__(self, /) -> str: ...
+    @property
+    def enabled(self, /) -> bool: ...
+    @enabled.setter
+    def enabled(self, /, enabled: bool) -> None: ...
+    @property
+    def hscroll(self, /) -> bool: ...
+    @hscroll.setter
+    def hscroll(self, /, hscroll: bool) -> None: ...
+    @property
+    def id(self, /) -> str: ...
+    def set_content(self, /, content: Any) -> None:
+        """
+        Set the layout panel scrolled by this view. Must be called before run().
+        """
+    @property
+    def visible(self, /) -> bool: ...
+    @visible.setter
+    def visible(self, /, visible: bool) -> None: ...
+    @property
+    def vscroll(self, /) -> bool: ...
+    @vscroll.setter
+    def vscroll(self, /, vscroll: bool) -> None: ...
 
 @final
 class Slider:
@@ -354,6 +507,25 @@ class TextBox:
     def visible(self, /) -> bool: ...
     @visible.setter
     def visible(self, /, visible: bool) -> None: ...
+
+@final
+class Timer:
+    """
+    A headless periodic timer.
+    """
+    def __repr__(self, /) -> str: ...
+    @property
+    def enabled(self, /) -> bool: ...
+    @enabled.setter
+    def enabled(self, /, enabled: bool) -> None: ...
+    @property
+    def id(self, /) -> str: ...
+    @property
+    def interval_ms(self, /) -> int: ...
+    @property
+    def on_tick(self, /) -> Any | None: ...
+    @on_tick.setter
+    def on_tick(self, /, callback: Any | None) -> None: ...
 
 @final
 class UpDownEdit:

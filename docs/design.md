@@ -40,7 +40,7 @@ PoC 已验证以下核心判断：
 
 | 类别 | 内容 |
 | --- | --- |
-| 组件 | `Button`、`Label`、`Edit`、`CheckBox`、`LinkLabel`、`Progress`、`TextBox`、`Slider`、`UpDownEdit` |
+| 组件 | `Button`、`Label`、`Edit`、`CheckBox`、`LinkLabel`、`Progress`、`TextBox`、`Slider`、`UpDownEdit`、`ComboBox`、`RadioButton`、`ListBox`、`ScrollView`、`Timer`（headless） |
 | 布局 | `StackPanel`、`Grid`、任意嵌套 |
 | 交互 | `on_click` 回调；`text` / `visible` / `enabled` 运行时修改 |
 | 生命周期 | 窗口创建、显示、关闭，全部由 Rust 驱动 |
@@ -51,7 +51,7 @@ PoC 已验证以下核心判断：
 
 - `webview`、`compio-compat`（按需求排除）。
 - 菜单、工具栏、对话框、多窗口。
-- 其余 widget（Edit、CheckBox、ComboBox、TabView、ScrollView、Progress…）。
+- 其余 widget（TabView、Picture、Canvas、菜单/对话框等）。
 - abi3 / 多 Python 版本 wheel、跨平台 CI（基础 maturin wheel 与 `.pyi` 已提供，见 §9.1）。
 
 ### 1.3 非目标（设计上不承诺）
@@ -106,7 +106,7 @@ pub trait Component: Sized {
 
 ```
 ┌──────────────────────────── Python 侧 ────────────────────────────┐
-│  App / StackPanel / Grid / 9 种 widget  (pyo3 pyclass)             │
+│  App / StackPanel / Grid / 14 种 widget  (pyo3 pyclass)            │
 │  - 声明组件与初始属性                                              │
 │  - 持有回调 (Py<PyAny>)                                            │
 │  - setter: 改阴影属性 + Shared::post(cmd)                          │
@@ -160,12 +160,21 @@ pub enum Cmd {              // 父 → 子
     SetIndeterminate(bool), // Progress
     SetValue(usize),        // UpDownEdit
     SetStep(usize),         // UpDownEdit
+    SetItems(Vec<String>),  // ComboBox / ListBox
+    SetSelection(Option<usize>),       // ComboBox
+    SetSelectedIndices(Vec<usize>),    // ListBox
+    SetMultiple(bool),      // ListBox
+    SetEditable(bool),      // ComboBox
+    SetHScroll(bool),       // ScrollView
+    SetVScroll(bool),       // ScrollView
     Raise(Evt),             // 内部：把原生事件转成输出事件
 }
 
 pub enum Evt {              // 子 → 根
-    Clicked(u64),           // Button / CheckBox / LinkLabel
-    Changed(u64),           // Edit / Slider / UpDownEdit
+    Clicked(u64),           // Button / CheckBox / RadioButton / LinkLabel
+    Changed(u64),           // Edit / ComboBox / Slider / UpDownEdit
+    Selected(u64),          // ComboBox / ListBox
+    Ticked(u64),            // Timer
     Closed,
     Resized,
 }
@@ -178,7 +187,8 @@ pub enum Msg {              // 根组件自己的消息
 
 - `Cmd` 不需要携带节点 id：每个 widget 有独立 channel，post 到哪个 sender 就是发给哪个节点。
 - `Evt` 带节点 id，因为根组件只收到一个汇聚流。
-- `Clicked` 对应 `on_click` 回调，`Changed` 对应 `on_change` 回调。
+- `Clicked` / `Changed` / `Selected` / `Ticked` 分别对应 `on_click` / `on_change` /
+  `on_select` / `on_tick` 回调。
 
 ### 4.2 `AnyWidget`：一个枚举承载所有 widget
 
@@ -193,17 +203,35 @@ pub enum AnyWidget {
     TextBox { node: Arc<WidgetNode>, child: Child<TextBox> },
     Slider { node: Arc<WidgetNode>, child: Child<Slider> },
     UpDownEdit { node: Arc<WidgetNode>, child: Child<UpDownEdit> },
+    ComboBox { node: Arc<WidgetNode>, child: Child<ComboBox> },
+    RadioButton { node: Arc<WidgetNode>, child: Child<RadioButton> },
+    ListBox { node: Arc<WidgetNode>, child: Child<ListBox> },
+    ScrollView { child: Child<ScrollView> },       // 容器
 }
 ```
 
-`node` 只在需要读 id 或同步用户改动时保留；`Label` 没有事件，所以省略。
+`node` 只在需要读 id 或同步用户改动时保留；`Label`/`ScrollView` 没有事件，所以省略。
 
 | widget | 原生事件 | 输出 |
 | --- | --- | --- |
-| Button / CheckBox / LinkLabel | Click | `Evt::Clicked(key)` |
+| Button / CheckBox / RadioButton / LinkLabel | Click | `Evt::Clicked(key)` |
 | Edit / Slider / UpDownEdit | Change | `Evt::Changed(key)` |
-| Label / Progress / TextBox | 无（空 Event 枚举） | — |
+| ComboBox | Select / Change | `Selected` / `Changed` |
+| ListBox | Select | `Evt::Selected(key)` |
+| Label / Progress / TextBox / ScrollView | 无（空 Event 枚举） | — |
+| Timer（独立 `TimerWidget`） | Tick | `Evt::Ticked(key)` |
 | Window | Close / Resize | `Evt::Closed` / `Evt::Resized` |
+
+两个特例：
+
+- **Timer** 不需要父窗口、也没有 `Layoutable`，无法放进 `AnyWidget`。根组件用独立的
+  `HashMap<NodeKey, Child<TimerWidget>>` 保存，`TimerWidget::init` 接收 `Duration`，
+  `Cmd::SetEnabled` 映射到 `Timer::start/stop`。它不参与布局，也不在 `collect_widgets` 中。
+- **ScrollView** 是容器：内容面板作为独立 `LayoutSpec` 存在 `WidgetNode.scroll_content`。
+  `collect_widgets` 在 ScrollView 之后递归收集内容 widget，并标记 `scroll_parent`；
+  根组件创建这些 widget 时把 `ScrollView` 的 `AsContainer` 作为原生 parent。
+  布局时 ScrollView 自身作为普通 widget 参与根布局，内容面板再以 `(0,0)` 为原点独立
+  arrange，最后调用 `ScrollView::set_size` 刷新滚动范围（详见 §4.8）。
 
 事件与更新的关键片段：
 
@@ -374,6 +402,32 @@ fn render_children(&mut self) -> Result<(), AppError> {
 
 代价是每次子组件更新都做一次全树布局（O(N) + 原生文本测量）。
 PoC 规模下可接受；优化方向见 §11（脏标记 / 增量布局）。
+
+### 4.8 ScrollView 与 Timer 的特殊处理
+
+**ScrollView（容器）**
+
+1. `app.scroll_view(...)` 创建 `WidgetKind::ScrollView` 节点；
+   `scroll.set_content(panel)` 把 StackPanel/Grid 存进 `node.scroll_content`。
+2. `collect_widgets` DFS 到 ScrollView 时，先收集它自身，再以它为 `scroll_parent`
+   递归收集内容面板里的 widget，因此创建顺序保证 ScrollView 先于内容 widget。
+3. 根组件创建内容 widget 时使用 `ScrollView` 的 `AsContainer`（winio 内部的
+   `View` 容器）作为原生 parent，而不是 Window。
+4. 布局分两步：根布局先把 ScrollView 当普通 widget 放到窗口坐标；随后
+   `layout_scroll_contents` 用内容面板的 preferred size 与 viewport 计算
+   content size，以 `(0,0)` 为原点独立 `arrange`，设置内容 widget 的 rect；
+   最后再次 `ScrollView::set_size(viewport)`，让 Win32 枚举子窗口并刷新滚动条范围。
+5. `hscroll=false` / `vscroll=false` 时，对应轴的内容尺寸被固定为 viewport 尺寸。
+
+**Timer（headless）**
+
+- 没有原生 parent、没有 `Layoutable`，因此不进入 `AnyWidget`/布局树。
+- `App.timer(id, interval_ms, on_tick=...)` 把节点放入 `App.timers`；
+  `run()` 时传给 `RootInit.timers`，根组件创建 `Child<TimerWidget>` 并发布
+  `timer_senders`。
+- `TimerWidget` 用 `Duration` 初始化；`Cmd::SetEnabled` 调 `Timer::start/stop`；
+  Tick 映射为 `Evt::Ticked(key)`，根组件调用 `on_tick`。
+- 间隔在创建时固定；运行时只支持启停。
 
 ---
 
@@ -553,6 +607,11 @@ grid.add(slider, row=2, col=1)
 | `app.text_box(id, text="")` | 创建 TextBox |
 | `app.slider(id, pos=0, minimum=0, maximum=100, *, on_change=None)` | 创建 Slider |
 | `app.up_down_edit(id, value=0, minimum=0, maximum=100, step=1, *, on_change=None)` | 创建 UpDownEdit |
+| `app.combo_box(id, items, *, selected=None, text="", editable=False, on_select=None, on_change=None)` | 创建 ComboBox |
+| `app.radio_button(id, text="", checked=False, *, on_click=None)` | 创建 RadioButton |
+| `app.list_box(id, items, *, selected=None, multiple=False, on_select=None)` | 创建 ListBox |
+| `app.scroll_view(id, *, hscroll=True, vscroll=True)` | 创建 ScrollView（用 `set_content()` 放内容） |
+| `app.timer(id, interval_ms=500, *, on_tick=None, enabled=True)` | 创建 headless Timer，不参与布局 |
 | `app.root = panel` | 指定根布局；必须在 `run()` 前 |
 | `app.run()` | 阻塞运行；释放 GIL；必须主线程调用 |
 | `app.quit()` | 请求关闭；可从其他线程调用 |
@@ -599,10 +658,33 @@ grid.add(slider, row=2, col=1)
 
 所有属性均可在运行中读写；setter 会投递 `Cmd`，回调中读到的阴影属性已由 `sync_props` 同步。
 
+**新增组件**
+
+| 属性/方法 | ComboBox | RadioButton | ListBox | ScrollView | Timer |
+| --- | --- | --- | --- | --- | --- |
+| `items` | ✅ get/set | — | ✅ get/set | — | — |
+| `selected` | ✅ `int \| None` | — | ✅ `list[int]` | — | — |
+| `multiple` | — | — | ✅ | — | — |
+| `editable` | ✅ | — | — | — | — |
+| `checked` | — | ✅ | — | — | — |
+| `hscroll` / `vscroll` | — | — | — | ✅ | — |
+| `interval_ms` | — | — | — | — | ✅ 只读 |
+| `text` | ✅ | ✅ | — | — | — |
+| `enabled` / `visible` | ✅ | ✅ | ✅ | ✅ | `enabled` |
+| `on_select` | ✅ | — | ✅ | — | — |
+| `on_click` | — | ✅ | — | — | — |
+| `on_change` | ✅ | — | — | — | — |
+| `on_tick` | — | — | — | — | ✅ |
+| `set_content(panel)` | — | — | — | ✅ 仅 run 前 | — |
+
+ScrollView 的内容面板是独立的 StackPanel/Grid；其中的 widget 会被自动以 ScrollView 为
+原生 parent 创建。Timer 是 headless 组件，不加入布局树。
+
 ### 6.3 语义约定
 
 - **预注册**：所有组件必须在 `run()` 前创建并挂到布局树；`run()` 之后新增布局不会被创建。
-- **回调零参数**：`on_click()` / `on_change()` 不传事件对象；需要区分来源时用闭包捕获句柄（见示例）。
+- **回调零参数**：`on_click()` / `on_change()` / `on_select()` / `on_tick()` 不传事件对象；
+  需要区分来源时用闭包捕获句柄（见示例）。
 - **回调线程**：始终在 UI 线程执行；回调里可直接读写其他句柄。
 - **异常**：回调抛出的 Python 异常由 `PyErr::print` 打印，不终止 UI 循环。
 - **句柄跨线程**：属性 setter / `quit()` 是线程安全的投递；`run()` 自身必须主线程。
@@ -735,7 +817,7 @@ pywinio-0.1.0.dist-info/RECORD
 
 ### 9.2 真实窗口
 
-运行 `examples/gallery.py`，9 种 widget 全部创建成功，截图如下：
+运行 `examples/gallery.py`，14 种 widget 全部创建成功，截图如下：
 
 ![gallery](images/gallery.png)
 
@@ -760,6 +842,15 @@ pywinio-0.1.0.dist-info/RECORD
 - **Progress**：初始 `PBM_GETPOS=35`，点击 `Progress +10` 后为 45，状态标签同步。
 - **UpDownEdit**：初始值 5 在回调状态中可见；用户点击/输入走 winio 的
   `WM_COMMAND(EN_CHANGE)` 路径。
+- **ComboBox**：`CB_SETCURSEL(2)` 后向内层窗口发送 `WM_COMMAND(CBN_SELCHANGE)`，
+  状态标签的 `combo` 变为 2，`on_select` 触发。
+- **ListBox**：`LB_SETSEL` 修改选中项并发送 `WM_COMMAND(LBN_SELCHANGE)`，
+  状态中的 `list` 从 `[1, 3]` 变为 `[3, 5]`。
+- **RadioButton**：`BM_CLICK` 触发 `on_click`；单选按钮被点击后仍保持 checked。
+- **Timer**：250ms 的 headless Timer 在 3.5s 内产生 14 次 tick，`ticks` 标签持续更新，
+  证明 Timer 不需要父窗口也能驱动回调。
+- **ScrollView**：gallery 中内容面板 12 行、view 高度 140，截图可见垂直滚动条与
+  滚动内容；内容 widget 在 ScrollView 的坐标空间中排列。
 
 ### 9.4 其他路径
 
@@ -776,8 +867,7 @@ pywinio-0.1.0.dist-info/RECORD
 
 ## 10. 已知限制（按严重度）
 
-1. **其余 widget 未支持**：ComboBox、ListBox、TabView、ScrollView、Picture、Canvas、菜单/对话框等
-   仍需扩展 `AnyWidget` 与 `Cmd`。
+1. **其余 widget 未支持**：TabView、Picture、Canvas、菜单/对话框等仍需扩展 `AnyWidget` 与 `Cmd`。
 2. **布局语义不完整**：无 min/max/shrink/RTL/自动放置；见 §5.5。复杂界面可能溢出或裁剪。
 3. **全量重排**：任何子组件更新都重建 measure/arrange；组件多时可能掉帧。
 4. **无属性绑定**：只能命令式 setter；没有 `Prop`/observable 集成。
@@ -799,6 +889,14 @@ pywinio-0.1.0.dist-info/RECORD
     设置 `slider.pos` 可能触发一次 `on_change`；回调里不要无条件再次设置 `pos`，避免自激。
 16. **UpDownEdit 初值读取**：原生 up-down 控件未就绪时 `value()` 可能失败，
     `sync_props` 会保留旧阴影值（不会崩溃）。
+17. **RadioButton 没有分组 API**：目前是独立单选按钮；winio 的 `RadioGroup` 尚未接入，
+    需要互斥选择时应使用 `ComboBox` 或后续增加 `RadioGroup`。
+18. **ScrollView 内容限制**：只支持一个内容面板，且 `set_content()` 必须在 `run()` 前调用；
+    运行中不能替换内容。内容面板的 Grid 越界只在 `run()` 的根布局校验中覆盖不到。
+19. **Timer 间隔固定**：`interval_ms` 只在创建时生效；运行时只能 `enabled` 启停，
+    不能改间隔。
+20. **ComboBox 清空选择**：`selected = None` 时 Python 侧记为 None，但 winio 只能
+    `set_selection(usize)`，原生控件可能仍显示上一次选择，直到下一次用户操作。
 
 ---
 
@@ -806,7 +904,7 @@ pywinio-0.1.0.dist-info/RECORD
 
 ### 11.1 v0.2：组件与交互
 
-- 扩展 widget：`ComboBox`、`ListBox`、`TabView`、`ScrollView`、`Picture`、`Canvas`、菜单与对话框。
+- 扩展 widget：`TabView`、`Picture`、`Canvas`、菜单与对话框。
 - 每个新 widget 加一个 `AnyWidget` variant + `Cmd` 变体；数量继续增长时可用宏生成。
 - 回调携带事件对象：`on_click(event)`；至少提供 `node_id`、可选坐标/键状态。
 - `App.start()` 非阻塞 + `App.wait()`，便于和 asyncio/线程结合。
@@ -863,7 +961,7 @@ Cargo.toml            cdylib + pyo3 0.30（experimental-inspect）+ winio 0.13�
 pyproject.toml        maturin / PEP 621 元数据（mixed Rust/Python 布局）
 build.ps1             构建并把 DLL 拷成 python/pywinio/_pywinio.pyd
 build-wheel.ps1       刷新 stub 并构建 CPython wheel（target/wheels）
-src/lib.rs            pyclass：App / 容器 / 9 种 widget；参数解析与校验
+src/lib.rs            pyclass：App / 容器 / 14 种 widget 与 Timer；参数解析与校验
 src/model.rs          WidgetNode、LayoutSpec、Track、Shared/AppRuntime、collect_widgets
 src/widget.rs         AnyWidget（统一 Component 实现）、Cmd/Evt
 src/root.rs           PyRoot（窗口、fan-in、重排、回调分发）、run_app

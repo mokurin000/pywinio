@@ -5,23 +5,29 @@ lifecycle (``init``/``start``/``update``/``render``) and dispatches widget
 events back to Python callbacks.
 
 Implemented widgets: ``Button``, ``Label``, ``Edit``, ``CheckBox``,
-``LinkLabel``, ``Progress``, ``TextBox``, ``Slider`` and ``UpDownEdit``, plus
-``StackPanel``/``Grid`` layout containers. WebView and the compio compatibility
-layer are intentionally out of scope.
+``LinkLabel``, ``Progress``, ``TextBox``, ``Slider``, ``UpDownEdit``,
+``ComboBox``, ``RadioButton``, ``ListBox``, ``ScrollView`` and the headless
+``Timer``, plus ``StackPanel``/``Grid`` layout containers. WebView and the
+compio compatibility layer are intentionally out of scope.
 """
 
 from ._pywinio import (
     App,
     Button,
     CheckBox,
+    ComboBox,
     Edit,
     Grid,
     Label,
     LinkLabel,
+    ListBox,
     Progress,
+    RadioButton,
+    ScrollView,
     Slider,
     StackPanel,
     TextBox,
+    Timer,
     UpDownEdit,
     __version__,
 )
@@ -30,14 +36,19 @@ __all__ = [
     "App",
     "Button",
     "CheckBox",
+    "ComboBox",
     "Edit",
     "Grid",
     "Label",
     "LinkLabel",
+    "ListBox",
     "Progress",
+    "RadioButton",
+    "ScrollView",
     "Slider",
     "StackPanel",
     "TextBox",
+    "Timer",
     "UpDownEdit",
     "__version__",
 ]
