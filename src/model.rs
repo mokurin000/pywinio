@@ -5,7 +5,7 @@
 //! created and inspected from Python and then handed to the winio root
 //! component when `App.run()` is called.
 
-use std::sync::atomic::{AtomicIsize, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use pyo3::prelude::*;
@@ -446,9 +446,6 @@ pub struct AppRuntime {
 /// State shared between Python objects and the winio component tree.
 pub struct Shared {
     pub runtime: Mutex<Option<AppRuntime>>,
-    /// Native top-level window handle, used to wake the event loop when a
-    /// command is posted from another thread.
-    hwnd: AtomicIsize,
     next_node: AtomicU64,
     next_layout: AtomicU64,
 }
@@ -457,7 +454,6 @@ impl Shared {
     pub fn new() -> Self {
         Self {
             runtime: Mutex::new(None),
-            hwnd: AtomicIsize::new(0),
             next_node: AtomicU64::new(1),
             next_layout: AtomicU64::new(1),
         }
@@ -469,14 +465,6 @@ impl Shared {
 
     pub fn next_layout_key(&self) -> LayoutKey {
         self.next_layout.fetch_add(1, Ordering::Relaxed)
-    }
-
-    pub fn set_window(&self, hwnd: isize) {
-        self.hwnd.store(hwnd, Ordering::Relaxed);
-    }
-
-    pub fn clear_window(&self) {
-        self.hwnd.store(0, Ordering::Relaxed);
     }
 
     /// Post a command to a widget. No-op when the window is not running yet.

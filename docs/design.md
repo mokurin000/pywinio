@@ -995,7 +995,6 @@ docs/design.md        本文
 | 重排策略 | `src/root.rs` `render_children` / `relayout` |
 | 布局算法 | `src/layout.rs` `measure` / `arrange` |
 | 命令投递 | `src/model.rs` `Shared::post` |
-| 跨线程唤醒 | `src/model.rs` `Shared::wake`（`PostMessageW(WM_NULL)`） |
 | Python setter | `src/widgets/label.rs` `Label::set_text` 等 |
 | 校验 | `src/layout.rs` `validate`、`src/model.rs` `collect_widgets` |
 | 类型存根 | `maturin generate-stubs` → `python/pywinio/_pywinio.pyi` |
