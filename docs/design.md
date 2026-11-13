@@ -572,10 +572,12 @@ left.add(app.label("hint", "The labels are updated from the button callback."))
 right = app.stack(orient="horizontal", spacing=8)
 grid.add(right, row=0, col=1)
 
+
 def add(delta):
     global clicks
     clicks += delta
-    counter.text = f"{clicks} clicks"     # 运行时属性修改
+    counter.text = f"{clicks} clicks"  # 运行时属性修改
+
 
 right.add(app.button("inc", "+1", on_click=lambda: add(1)))
 right.add(app.button("dec", "−1", on_click=lambda: add(-1)))
@@ -709,19 +711,12 @@ Python 主线程                          UI 线程（同一个 OS 线程）
      │                                       ├─ MsgWaitForMultipleObjectsEx
      │                                       └─ 回调时 Python::attach
      │
-     └─ 其他线程: label.text = ... ──► Channel<Cmd> ──► waker.wake()
-                                                    └─ PostMessage(hwnd, WM_NULL)
+     └─ 其他线程: label.text = ... ──► Channel<Cmd>
 ```
 
 - winio 是单线程运行时；`run()` 在 Python 主线程上阻塞，正好符合 Win32 消息循环的线程要求。
 - `Python::detach` 保证其他 Python 线程仍可运行（例如定时器线程调用 `app.quit()`）。
 - `ComponentSender<T>` 内部是 `Arc<Mutex<Channel<T>>>`，`post()` 可从任意线程调用；
-  `Channel::send` 会取走并 `wake()` 已注册的 waker。
-- win32 后端的 waker 是 `ApcWaker`：`GetCurrentThread` 的句柄 + `NtAlertThread`，
-  配合 `MsgWaitForMultipleObjectsEx(..., MWMO_ALERTABLE)`。实测仅依赖它时，
-  跨线程唤醒不够及时；因此 `Shared::post/quit` 在 post 之后额外
-  `PostMessageW(hwnd, WM_NULL, 0, 0)`，这是唤醒 Win32 消息循环的标准做法。
-  实测：定时器 2.51s 触发，`run()` 2.52s 返回。
 
 ### 7.2 GIL 与锁
 

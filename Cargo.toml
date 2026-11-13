@@ -29,4 +29,3 @@ windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_UI_WindowsAndMessaging",
 ] }
-winio-winui3 = "0.7.0-alpha.8"

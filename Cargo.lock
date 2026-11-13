@@ -1154,7 +1154,6 @@ dependencies = [
  "pyo3",
  "windows-sys 0.61.2",
  "winio",
- "winio-winui3",
 ]
 
 [[package]]

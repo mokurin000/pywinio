@@ -479,34 +479,12 @@ impl Shared {
         self.hwnd.store(0, Ordering::Relaxed);
     }
 
-    /// Wake a message loop blocked in `MsgWaitForMultipleObjectsEx`.
-    ///
-    /// The channel waker alone is not reliable on win32 when the post comes
-    /// from another thread; posting a no-op message to the top-level window is
-    /// the canonical way to wake the loop.
-    fn wake(&self) {
-        let hwnd = self.hwnd.load(Ordering::Relaxed);
-        if hwnd == 0 {
-            return;
-        }
-        #[cfg(windows)]
-        unsafe {
-            windows_sys::Win32::UI::WindowsAndMessaging::PostMessageW(
-                hwnd as windows_sys::Win32::Foundation::HWND,
-                windows_sys::Win32::UI::WindowsAndMessaging::WM_NULL,
-                0,
-                0,
-            );
-        }
-    }
-
     /// Post a command to a widget. No-op when the window is not running yet.
     pub fn post(&self, key: NodeKey, cmd: Cmd) {
         if let Some(rt) = self.runtime.lock().unwrap().as_ref()
             && let Some(sender) = rt.senders.get(&key)
         {
             sender.post(cmd);
-            self.wake();
         }
     }
 
@@ -516,7 +494,6 @@ impl Shared {
             && let Some(sender) = rt.timer_senders.get(&key)
         {
             sender.post(cmd);
-            self.wake();
         }
     }
 
@@ -526,7 +503,6 @@ impl Shared {
             && let Some(sender) = &rt.root
         {
             sender.post(Msg::Quit);
-            self.wake();
         }
     }
 }
