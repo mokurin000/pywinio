@@ -8,7 +8,6 @@
 
 import os
 import threading
-import time
 
 import pywinio as w
 
@@ -177,10 +176,5 @@ if autoclose:
     timer.daemon = True
     timer.start()
 
-# Spawn app in other thread, python side runs normally
-thread = threading.Thread(target=app.run)
-thread.start()
-while thread.is_alive():
-    time.sleep(1.0)
-    print(f"gallery status: {status.text}", flush=True)
+app.run()
 print(f"gallery closed: {status.text}", flush=True)
