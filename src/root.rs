@@ -79,25 +79,81 @@ impl Component for PyRoot {
         window.set_size(size)?;
 
         let mut widgets: HashMap<u64, Child<AnyWidget>> = HashMap::with_capacity(plans.len());
-        for plan in &plans {
-            let node = plan.node.clone();
-            let child = {
-                let parent: BorrowedContainer<'_> = match plan.scroll_parent {
-                    Some(key) => widgets
-                        .get(&key)
-                        .and_then(|widget| widget.as_scroll_container())
-                        .ok_or_else(|| {
-                            AppError::layout(format!("missing ScrollView parent {key}"))
-                        })?,
-                    None => (&window).into(),
+        let tab_selections: Vec<(u64, usize)> = plans
+            .iter()
+            .filter(|plan| plan.node.kind == crate::model::WidgetKind::TabView)
+            .filter_map(|plan| {
+                plan.node
+                    .props()
+                    .selected
+                    .map(|selection| (plan.node.key, selection))
+            })
+            .collect();
+
+        // Create widgets in dependency order: a TabViewItem needs its TabView,
+        // and tab-page content needs its TabViewItem.
+        let mut pending: Vec<Option<WidgetPlan>> = plans.iter().cloned().map(Some).collect();
+        let mut created = 0;
+        while created < pending.len() {
+            let mut progress = false;
+            for slot in &mut pending {
+                let Some(plan) = slot.take() else {
+                    continue;
                 };
-                Child::<AnyWidget>::init(AnyInit {
-                    node: node.clone(),
-                    parent,
-                })
-                .await?
-            };
-            widgets.insert(node.key, child);
+                let node = plan.node.clone();
+                let child = {
+                    let mut tab_view: Option<&TabView> = None;
+                    let parent: BorrowedContainer<'_> = if let Some(key) = plan.tab_view_parent {
+                        let Some(tab) = widgets.get(&key).and_then(|widget| widget.as_tab_view())
+                        else {
+                            *slot = Some(plan);
+                            continue;
+                        };
+                        tab_view = Some(tab);
+                        (&window).into()
+                    } else if let Some(key) = plan.tab_item_parent {
+                        let Some(parent) = widgets
+                            .get(&key)
+                            .and_then(|widget| widget.as_tab_item_container())
+                        else {
+                            *slot = Some(plan);
+                            continue;
+                        };
+                        parent
+                    } else if let Some(key) = plan.scroll_parent {
+                        let Some(parent) = widgets
+                            .get(&key)
+                            .and_then(|widget| widget.as_scroll_container())
+                        else {
+                            *slot = Some(plan);
+                            continue;
+                        };
+                        parent
+                    } else {
+                        (&window).into()
+                    };
+                    Child::<AnyWidget>::init(AnyInit {
+                        node: node.clone(),
+                        parent,
+                        tab_view,
+                    })
+                    .await?
+                };
+                widgets.insert(node.key, child);
+                created += 1;
+                progress = true;
+            }
+            if !progress {
+                return Err(AppError::layout(
+                    "cannot resolve widget parent hierarchy".to_string(),
+                ));
+            }
+        }
+
+        for (key, selection) in tab_selections {
+            if let Some(widget) = widgets.get_mut(&key) {
+                widget.select_tab(selection)?;
+            }
         }
 
         let mut timers: HashMap<u64, Child<TimerWidget>> =
@@ -249,7 +305,48 @@ impl PyRoot {
                 widget.set_rect(rect)?;
             }
         }
+        self.layout_tab_contents()?;
         self.layout_scroll_contents()?;
+        Ok(())
+    }
+
+    /// Arrange the content panel of every `TabViewItem` inside the page's
+    /// available client area.
+    fn layout_tab_contents(&mut self) -> std::result::Result<(), AppError> {
+        let tab_keys: Vec<u64> = self
+            .widgets
+            .iter()
+            .filter(|(_, widget)| widget.as_tab_item_container().is_some())
+            .map(|(key, _)| *key)
+            .collect();
+
+        for key in tab_keys {
+            let content = self
+                .nodes
+                .get(&key)
+                .and_then(|node| node.tab_content.lock().unwrap().clone());
+            let Some(content) = content else {
+                continue;
+            };
+            let size = self
+                .widgets
+                .get(&key)
+                .ok_or_else(|| AppError::layout(format!("unknown TabViewItem {key}")))?
+                .size()?;
+            let measured = layout::measure(&content, |child_key| {
+                let widget = self
+                    .widgets
+                    .get(&child_key)
+                    .ok_or_else(|| AppError::layout(format!("unknown widget node {child_key}")))?;
+                Ok(widget.preferred_size()?)
+            })?;
+            let rects = layout::arrange(&content, Rect::new(Point::zero(), size), &measured)?;
+            for (child_key, rect) in rects {
+                if let Some(widget) = self.widgets.get_mut(&child_key) {
+                    widget.set_rect(rect)?;
+                }
+            }
+        }
         Ok(())
     }
 

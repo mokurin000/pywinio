@@ -37,6 +37,8 @@ pub enum WidgetKind {
     ListBox,
     ScrollView,
     Timer,
+    TabView,
+    TabViewItem,
 }
 
 /// Properties mirrored on the Python side.
@@ -110,6 +112,8 @@ pub struct WidgetNode {
     pub on_select: Mutex<Option<Py<PyAny>>>,
     pub on_tick: Mutex<Option<Py<PyAny>>>,
     pub scroll_content: Mutex<Option<Arc<LayoutSpec>>>,
+    pub tab_items: Mutex<Vec<Arc<WidgetNode>>>,
+    pub tab_content: Mutex<Option<Arc<LayoutSpec>>>,
 }
 
 impl WidgetNode {
@@ -127,6 +131,8 @@ impl WidgetNode {
             on_select: Mutex::new(None),
             on_tick: Mutex::new(None),
             scroll_content: Mutex::new(None),
+            tab_items: Mutex::new(Vec::new()),
+            tab_content: Mutex::new(None),
         }
     }
 
@@ -340,30 +346,34 @@ impl LayoutSpec {
     }
 }
 
-/// One widget to materialize, plus the `ScrollView` it is parented to.
+/// One widget to materialize, plus the native container it is parented to.
 #[derive(Clone)]
 pub struct WidgetPlan {
     pub node: Arc<WidgetNode>,
     pub scroll_parent: Option<NodeKey>,
+    pub tab_view_parent: Option<NodeKey>,
+    pub tab_item_parent: Option<NodeKey>,
 }
 
 /// Collect every widget referenced by the layout tree, in depth-first order.
 ///
 /// Rejects duplicate widget entries (one native widget cannot live in two
 /// places) and cycles in the container graph. Widgets inside a `ScrollView`
-/// content panel are collected after the scroll view and carry its key as
-/// `scroll_parent`.
+/// content panel carry its key as `scroll_parent`; widgets inside a `TabView`
+/// page carry the `TabViewItem` key as `tab_item_parent`, and the item itself
+/// carries `tab_view_parent`.
 pub fn collect_widgets(root: &Arc<LayoutSpec>) -> Result<Vec<WidgetPlan>, String> {
     let mut widgets = Vec::new();
     let mut keys = std::collections::HashSet::new();
     let mut panels = std::collections::HashSet::new();
-    collect_inner(root, None, &mut widgets, &mut keys, &mut panels)?;
+    collect_inner(root, None, None, &mut widgets, &mut keys, &mut panels)?;
     Ok(widgets)
 }
 
 fn collect_inner(
     node: &Arc<LayoutSpec>,
     scroll_parent: Option<NodeKey>,
+    tab_item_parent: Option<NodeKey>,
     widgets: &mut Vec<WidgetPlan>,
     keys: &mut std::collections::HashSet<NodeKey>,
     panels: &mut std::collections::HashSet<LayoutKey>,
@@ -386,14 +396,37 @@ fn collect_inner(
                 widgets.push(WidgetPlan {
                     node: w.clone(),
                     scroll_parent,
+                    tab_view_parent: None,
+                    tab_item_parent,
                 });
                 if w.kind == WidgetKind::ScrollView
                     && let Some(content) = w.scroll_content.lock().unwrap().clone()
                 {
-                    collect_inner(&content, Some(w.key), widgets, keys, panels)?;
+                    collect_inner(&content, Some(w.key), None, widgets, keys, panels)?;
+                }
+                if w.kind == WidgetKind::TabView {
+                    for tab in w.tab_items.lock().unwrap().iter() {
+                        if !keys.insert(tab.key) {
+                            return Err(format!(
+                                "tab item {:?} ({}) is used more than once",
+                                tab.id, tab.key
+                            ));
+                        }
+                        widgets.push(WidgetPlan {
+                            node: tab.clone(),
+                            scroll_parent: None,
+                            tab_view_parent: Some(w.key),
+                            tab_item_parent: None,
+                        });
+                        if let Some(content) = tab.tab_content.lock().unwrap().clone() {
+                            collect_inner(&content, None, Some(tab.key), widgets, keys, panels)?;
+                        }
+                    }
                 }
             }
-            Elem::Panel(p) => collect_inner(p, scroll_parent, widgets, keys, panels)?,
+            Elem::Panel(p) => {
+                collect_inner(p, scroll_parent, tab_item_parent, widgets, keys, panels)?
+            }
         }
     }
     Ok(())

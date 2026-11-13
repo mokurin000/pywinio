@@ -62,7 +62,8 @@ pub mod _pywinio {
     #[pymodule_export]
     use super::{
         App, Button, CheckBox, ComboBox, Edit, Grid, Label, LinkLabel, ListBox, Progress,
-        RadioButton, ScrollView, Slider, StackPanel, TextBox, Timer, UpDownEdit,
+        RadioButton, ScrollView, Slider, StackPanel, TabView, TabViewItem, TextBox, Timer,
+        UpDownEdit,
     };
 
     #[pymodule_export]

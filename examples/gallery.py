@@ -17,23 +17,25 @@ root = app.stack(orient="vertical", spacing=10, padding=16)
 status = app.label("status", "interact with the widgets")
 root.add(status)
 
-grid = app.grid(
-    columns="140,1*",
-    rows=",".join(["auto"] * 11),
-    col_gap=12,
-    row_gap=8,
-)
-root.add(grid, grow=True)
+tabs = app.tab_view("tabs", selected=0, on_select=lambda: refresh_status())
+root.add(tabs, grow=True)
 
-# --- Edit ---------------------------------------------------------------
-grid.add(app.label("edit_label", "Edit"), valign="center", row=0, col=0)
+
+def make_grid(rows: int):
+    return app.grid(
+        columns="140,1*",
+        rows=",".join(["auto"] * rows),
+        col_gap=12,
+        row_gap=8,
+    )
+
 
 state = {"links": 0, "ticks": 0}
 
 
 def refresh_status():
     status.text = (
-        f"edit={edit.text!r}  checked={check.checked}  "
+        f"tab={tabs.selected}  edit={edit.text!r}  checked={check.checked}  "
         f"progress={progress.pos}  slider={slider.pos}  "
         f"updown={up.value}  links={state['links']}  "
         f"combo={combo.selected}  list={lb.selected}  "
@@ -41,21 +43,25 @@ def refresh_status():
     )
 
 
-edit = app.edit("edit", "type here", on_change=refresh_status)
-grid.add(edit, row=0, col=1)
+# --- Basics -------------------------------------------------------------
+basics = make_grid(5)
+basics_page = app.tab_view_item(tabs, "Basics")
+basics_page.set_content(basics)
 
-# --- CheckBox -----------------------------------------------------------
-grid.add(app.label("check_label", "CheckBox"), valign="center", row=1, col=0)
+basics.add(app.label("edit_label", "Edit"), valign="center", row=0, col=0)
+edit = app.edit("edit", "type here", on_change=refresh_status)
+basics.add(edit, row=0, col=1)
+
+basics.add(app.label("check_label", "CheckBox"), valign="center", row=1, col=0)
 check = app.check_box(
     "check",
     "enable something",
     checked=True,
     on_click=refresh_status,
 )
-grid.add(check, row=1, col=1)
+basics.add(check, row=1, col=1)
 
-# --- LinkLabel ----------------------------------------------------------
-grid.add(app.label("link_label", "LinkLabel"), valign="center", row=2, col=0)
+basics.add(app.label("link_label", "LinkLabel"), valign="center", row=2, col=0)
 
 
 def on_link():
@@ -64,26 +70,27 @@ def on_link():
 
 
 link = app.link_label("link", "click me (no uri)", on_click=on_link)
-grid.add(link, row=2, col=1)
+basics.add(link, row=2, col=1)
 
-# --- Progress -----------------------------------------------------------
-grid.add(app.label("progress_label", "Progress"), valign="center", row=3, col=0)
+basics.add(app.label("progress_label", "Progress"), valign="center", row=3, col=0)
 progress = app.progress("progress", pos=35, maximum=100)
-grid.add(progress, row=3, col=1)
+basics.add(progress, row=3, col=1)
 
-# --- TextBox ------------------------------------------------------------
-grid.add(app.label("textbox_label", "TextBox"), valign="center", row=4, col=0)
+basics.add(app.label("textbox_label", "TextBox"), valign="center", row=4, col=0)
 text_box = app.text_box("textbox", "multi-line\nread-only demo? no, editable")
 text_box.tooltip = "You could edit multi-line text here."
-grid.add(text_box, row=4, col=1, height=90)
+basics.add(text_box, row=4, col=1, height=90)
 
-# --- Slider -------------------------------------------------------------
-grid.add(app.label("slider_label", "Slider"), valign="center", row=5, col=0)
+# --- Inputs -------------------------------------------------------------
+inputs = make_grid(5)
+inputs_page = app.tab_view_item(tabs, "Inputs")
+inputs_page.set_content(inputs)
+
+inputs.add(app.label("slider_label", "Slider"), valign="center", row=0, col=0)
 slider = app.slider("slider", pos=30, maximum=100, on_change=refresh_status)
-grid.add(slider, row=5, col=1)
+inputs.add(slider, row=0, col=1)
 
-# --- UpDownEdit ---------------------------------------------------------
-grid.add(app.label("updown_label", "UpDownEdit"), valign="center", row=6, col=0)
+inputs.add(app.label("updown_label", "UpDownEdit"), valign="center", row=1, col=0)
 up = app.up_down_edit(
     "updown",
     value=5,
@@ -92,10 +99,9 @@ up = app.up_down_edit(
     step=1,
     on_change=refresh_status,
 )
-grid.add(up, row=6, col=1)
+inputs.add(up, row=1, col=1)
 
-# --- ComboBox -----------------------------------------------------------
-grid.add(app.label("combo_label", "ComboBox"), valign="center", row=7, col=0)
+inputs.add(app.label("combo_label", "ComboBox"), valign="center", row=2, col=0)
 combo = app.combo_box(
     "combo",
     ["alpha", "beta", "gamma"],
@@ -103,20 +109,18 @@ combo = app.combo_box(
     on_select=refresh_status,
     on_change=refresh_status,
 )
-grid.add(combo, row=7, col=1)
+inputs.add(combo, row=2, col=1)
 
-# --- RadioButton --------------------------------------------------------
-grid.add(app.label("radio_label", "RadioButton"), valign="center", row=8, col=0)
+inputs.add(app.label("radio_label", "RadioButton"), valign="center", row=3, col=0)
 radio = app.radio_button(
     "radio",
     "pick me",
     checked=True,
     on_click=refresh_status,
 )
-grid.add(radio, row=8, col=1)
+inputs.add(radio, row=3, col=1)
 
-# --- ListBox ------------------------------------------------------------
-grid.add(app.label("list_label", "ListBox"), valign="center", row=9, col=0)
+inputs.add(app.label("list_label", "ListBox"), valign="center", row=4, col=0)
 lb = app.list_box(
     "list",
     [f"item {i}" for i in range(1, 9)],
@@ -124,16 +128,20 @@ lb = app.list_box(
     multiple=True,
     on_select=refresh_status,
 )
-grid.add(lb, row=9, col=1, height=120)
+inputs.add(lb, row=4, col=1, height=140)
 
-# --- ScrollView ---------------------------------------------------------
-grid.add(app.label("scroll_label", "ScrollView"), valign="center", row=10, col=0)
+# --- Views --------------------------------------------------------------
+views = make_grid(1)
+views_page = app.tab_view_item(tabs, "Views")
+views_page.set_content(views)
+
+views.add(app.label("scroll_label", "ScrollView"), valign="center", row=0, col=0)
 scroll = app.scroll_view("scroll", hscroll=False, vscroll=True)
 scroll_content = app.stack(orient="vertical", spacing=6, padding=6)
-for i in range(12):
+for i in range(20):
     scroll_content.add(app.label(f"scroll_item_{i}", f"scrollable row {i}"))
 scroll.set_content(scroll_content)
-grid.add(scroll, row=10, col=1, height=140)
+views.add(scroll, row=0, col=1, height=260)
 
 
 # --- Timer (headless) ---------------------------------------------------

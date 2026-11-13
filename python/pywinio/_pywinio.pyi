@@ -1,7 +1,7 @@
 from _typeshed import SupportsGetItem
 from typing import Literal, Any, Final, SupportsFloat, SupportsIndex, final
 
-__all__ = ["__version__", "App", "Button", "CheckBox", "ComboBox", "Edit", "Grid", "Label", "LinkLabel", "ListBox", "Progress", "RadioButton", "ScrollView", "Slider", "StackPanel", "TextBox", "Timer", "UpDownEdit"]
+__all__ = ["__version__", "App", "Button", "CheckBox", "ComboBox", "Edit", "Grid", "Label", "LinkLabel", "ListBox", "Progress", "RadioButton", "ScrollView", "Slider", "StackPanel", "TabView", "TabViewItem", "TextBox", "Timer", "UpDownEdit"]
 
 __version__: Final[str]
 
@@ -99,6 +99,14 @@ class App:
     def stack(self, /, orient: "Literal['vertical', 'horizontal']" = "vertical", spacing: SupportsFloat | SupportsIndex = 0.0, padding: SupportsFloat | SupportsIndex = 0.0) -> StackPanel:
         """
         Create a vertical or horizontal stack container.
+        """
+    def tab_view(self, /, id: str, *, selected: SupportsIndex = 0, on_select: Any | None = None) -> TabView:
+        """
+        Create a tabbed container.
+        """
+    def tab_view_item(self, /, tab_view: Any, title: str) -> TabViewItem:
+        """
+        Create a page of a `TabView`.
         """
     def text_box(self, /, id: str, text: str = "") -> TextBox:
         """
@@ -506,6 +514,48 @@ class StackPanel:
         """
     @property
     def orient(self, /) -> str: ...
+
+@final
+class TabView:
+    """
+    A tabbed container.
+    """
+    def __repr__(self, /) -> str: ...
+    @property
+    def enabled(self, /) -> bool: ...
+    @enabled.setter
+    def enabled(self, /, enabled: bool) -> None: ...
+    @property
+    def id(self, /) -> str: ...
+    @property
+    def on_select(self, /) -> Any | None: ...
+    @on_select.setter
+    def on_select(self, /, callback: Any | None) -> None: ...
+    @property
+    def selected(self, /) -> int | None: ...
+    @selected.setter
+    def selected(self, /, selected: SupportsIndex | None) -> None: ...
+    @property
+    def visible(self, /) -> bool: ...
+    @visible.setter
+    def visible(self, /, visible: bool) -> None: ...
+
+@final
+class TabViewItem:
+    """
+    One page of a `TabView`.
+    """
+    def __repr__(self, /) -> str: ...
+    @property
+    def id(self, /) -> str: ...
+    def set_content(self, /, content: Any) -> None:
+        """
+        Set the layout panel displayed on this page.
+        """
+    @property
+    def text(self, /) -> str: ...
+    @text.setter
+    def text(self, /, text: str) -> None: ...
 
 @final
 class TextBox:

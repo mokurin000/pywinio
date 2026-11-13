@@ -6,7 +6,7 @@ use winio::prelude::{HAlign, Orient, VAlign};
 
 use super::{
     Button, CheckBox, ComboBox, Edit, Grid, Label, LinkLabel, ListBox, Progress, RadioButton,
-    ScrollView, Slider, StackPanel, TextBox, UpDownEdit,
+    ScrollView, Slider, StackPanel, TabView, TextBox, UpDownEdit,
 };
 use crate::model::*;
 use crate::widget::Cmd;
@@ -469,6 +469,9 @@ pub(crate) fn extract_elem(child: &Bound<'_, PyAny>) -> PyResult<Elem> {
     }
     if let Ok(scroll) = child.extract::<PyRef<'_, ScrollView>>() {
         return Ok(Elem::Widget(scroll.node.clone()));
+    }
+    if let Ok(tab) = child.extract::<PyRef<'_, TabView>>() {
+        return Ok(Elem::Widget(tab.node.clone()));
     }
     if let Ok(panel) = child.extract::<PyRef<'_, StackPanel>>() {
         return Ok(Elem::Panel(panel.layout.clone()));

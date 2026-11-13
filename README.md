@@ -10,7 +10,7 @@
 
 ## 已实现
 
-- 组件：`Button`、`Label`、`Edit`、`CheckBox`、`LinkLabel`、`Progress`、`TextBox`、`Slider`、`UpDownEdit`、`ComboBox`、`RadioButton`、`ListBox`、`ScrollView`、`Timer`（headless）
+- 组件：`Button`、`Label`、`Edit`、`CheckBox`、`LinkLabel`、`Progress`、`TextBox`、`Slider`、`UpDownEdit`、`ComboBox`、`RadioButton`、`ListBox`、`ScrollView`、`TabView`、`TabViewItem`、`Timer`（headless）
 - 布局：`StackPanel`（横/竖、spacing、padding、grow、对齐）、`Grid`（固定/auto/权重轨道、跨行跨列、gap），可任意嵌套
 - 运行时：`label.text = ...`、`slider.pos = ...` 等属性修改会投递到 UI 线程并触发重排
 - 回调：`on_click` / `on_change` / `on_select` / `on_tick` 注册，自动接到 winio 的 `start`/`update`

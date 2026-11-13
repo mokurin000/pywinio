@@ -56,6 +56,7 @@ pub enum Evt {
 pub struct AnyInit<'a> {
     pub node: Arc<WidgetNode>,
     pub parent: BorrowedContainer<'a>,
+    pub tab_view: Option<&'a TabView>,
 }
 
 /// A heterogeneous, ELM-compatible wrapper around the supported widgets.
@@ -110,6 +111,13 @@ pub enum AnyWidget {
     ScrollView {
         child: Child<ScrollView>,
     },
+    TabView {
+        node: Arc<WidgetNode>,
+        child: Child<TabView>,
+    },
+    TabViewItem {
+        child: Child<TabViewItem>,
+    },
 }
 
 /// Expand to `$body` once per variant, binding the variant's `child` field.
@@ -129,6 +137,32 @@ macro_rules! dispatch_child {
             Self::RadioButton { $child, .. } => $body,
             Self::ListBox { $child, .. } => $body,
             Self::ScrollView { $child, .. } => $body,
+            Self::TabView { $child, .. } => $body,
+            Self::TabViewItem { $child, .. } => $body,
+        }
+    };
+}
+
+/// Same as `dispatch_child!`, but skipping `TabViewItem` (it is a container
+/// without `Visible`/`Layoutable`).
+macro_rules! dispatch_no_tab_item {
+    ($this:expr, $child:ident => $body:expr, $fallback:expr) => {
+        match $this {
+            Self::Button { $child, .. } => $body,
+            Self::Label { $child, .. } => $body,
+            Self::Edit { $child, .. } => $body,
+            Self::CheckBox { $child, .. } => $body,
+            Self::LinkLabel { $child, .. } => $body,
+            Self::Progress { $child, .. } => $body,
+            Self::TextBox { $child, .. } => $body,
+            Self::Slider { $child, .. } => $body,
+            Self::UpDownEdit { $child, .. } => $body,
+            Self::ComboBox { $child, .. } => $body,
+            Self::RadioButton { $child, .. } => $body,
+            Self::ListBox { $child, .. } => $body,
+            Self::ScrollView { $child, .. } => $body,
+            Self::TabView { $child, .. } => $body,
+            Self::TabViewItem { .. } => $fallback,
         }
     };
 }
@@ -151,6 +185,8 @@ macro_rules! dispatch_preferred {
             Self::RadioButton { $child, .. } => $body,
             Self::ListBox { $child, .. } => $body,
             Self::ScrollView { .. } => Ok(Size::zero()),
+            Self::TabView { .. } => Ok(Size::zero()),
+            Self::TabViewItem { .. } => Ok(Size::zero()),
         }
     };
 }
@@ -210,6 +246,11 @@ impl AnyWidget {
                     node.props.lock().unwrap().selected_indices = selected;
                 }
             }
+            Self::TabView { node, child } => {
+                if let Ok(selection) = child.selection() {
+                    node.props.lock().unwrap().selected = selection;
+                }
+            }
             _ => {}
         }
     }
@@ -222,6 +263,30 @@ impl AnyWidget {
             _ => None,
         }
     }
+
+    /// The native `TabView` used to create a `TabViewItem`.
+    pub fn as_tab_view(&self) -> Option<&TabView> {
+        match self {
+            Self::TabView { child, .. } => Some(child),
+            _ => None,
+        }
+    }
+
+    /// The native container of a tab page.
+    pub fn as_tab_item_container(&self) -> Option<BorrowedContainer<'_>> {
+        match self {
+            Self::TabViewItem { child, .. } => Some(child.as_container()),
+            _ => None,
+        }
+    }
+
+    /// Select a tab after all `TabViewItem`s have been appended.
+    pub fn select_tab(&mut self, index: usize) -> Result<()> {
+        if let Self::TabView { child, .. } = self {
+            child.set_selection(index)?;
+        }
+        Ok(())
+    }
 }
 
 impl Failable for AnyWidget {
@@ -230,11 +295,17 @@ impl Failable for AnyWidget {
 
 impl Layoutable for AnyWidget {
     fn loc(&self) -> Result<Point> {
-        dispatch_child!(self, child => child.loc())
+        match self {
+            Self::TabViewItem { .. } => Ok(Point::zero()),
+            _ => dispatch_no_tab_item!(self, child => child.loc(), Ok(Point::zero())),
+        }
     }
 
     fn set_loc(&mut self, p: Point) -> Result<()> {
-        dispatch_child!(self, child => child.set_loc(p))
+        match self {
+            Self::TabViewItem { .. } => Ok(()),
+            _ => dispatch_no_tab_item!(self, child => child.set_loc(p), Ok(())),
+        }
     }
 
     fn size(&self) -> Result<Size> {
@@ -242,7 +313,10 @@ impl Layoutable for AnyWidget {
     }
 
     fn set_size(&mut self, s: Size) -> Result<()> {
-        dispatch_child!(self, child => child.set_size(s))
+        match self {
+            Self::TabViewItem { .. } => Ok(()),
+            _ => dispatch_no_tab_item!(self, child => child.set_size(s), Ok(())),
+        }
     }
 
     fn preferred_size(&self) -> Result<Size> {
@@ -397,6 +471,20 @@ impl Component for AnyWidget {
                 child.set_visible(props.visible)?;
                 Ok(Self::ScrollView { child })
             }
+            WidgetKind::TabView => {
+                let mut child = Child::<TabView>::init(parent).await?;
+                child.set_enabled(props.enabled)?;
+                child.set_visible(props.visible)?;
+                Ok(Self::TabView { node, child })
+            }
+            WidgetKind::TabViewItem => {
+                let tab = init
+                    .tab_view
+                    .expect("TabViewItem must be created with its TabView");
+                let mut child = Child::<TabViewItem>::init(tab).await?;
+                child.set_text(&props.text)?;
+                Ok(Self::TabViewItem { child })
+            }
             WidgetKind::Timer => unreachable!("timers are not AnyWidgets"),
         }
     }
@@ -488,6 +576,18 @@ impl Component for AnyWidget {
             Self::ScrollView { child, .. } => {
                 child.start(sender, |_event: ScrollViewEvent| None).await
             }
+            Self::TabView { node, child } => {
+                let key = node.key;
+                child
+                    .start(sender, move |event| match event {
+                        TabViewEvent::Select => Some(Cmd::Raise(Evt::Selected(key))),
+                        _ => None,
+                    })
+                    .await
+            }
+            Self::TabViewItem { child, .. } => {
+                child.start(sender, |_event: TabViewItemEvent| None).await
+            }
             Self::Label { child, .. } => child.start(sender, |_event: LabelEvent| None).await,
             Self::Progress { child, .. } => child.start(sender, |_event: ProgressEvent| None).await,
             Self::TextBox { child, .. } => child.start(sender, |_event: TextBoxEvent| None).await,
@@ -514,6 +614,7 @@ impl Component for AnyWidget {
                     Self::TextBox { child, .. } => child.set_text(&text)?,
                     Self::ComboBox { child, .. } => child.set_text(&text)?,
                     Self::RadioButton { child, .. } => child.set_text(&text)?,
+                    Self::TabViewItem { child, .. } => child.set_text(&text)?,
                     _ => return Ok(false),
                 }
                 Ok(true)
@@ -532,12 +633,17 @@ impl Component for AnyWidget {
                     Self::RadioButton { child, .. } => child.set_enabled(enabled)?,
                     Self::ListBox { child, .. } => child.set_enabled(enabled)?,
                     Self::ScrollView { child, .. } => child.set_enabled(enabled)?,
+                    Self::TabView { child, .. } => child.set_enabled(enabled)?,
+                    Self::TabViewItem { .. } => return Ok(false),
                     Self::Label { .. } => return Ok(false),
                 }
                 Ok(false)
             }
             Cmd::SetVisible(visible) => {
-                dispatch_child!(self, child => child.set_visible(visible)?);
+                if matches!(self, Self::TabViewItem { .. }) {
+                    return Ok(false);
+                }
+                dispatch_no_tab_item!(self, child => child.set_visible(visible)?, ());
                 Ok(true)
             }
             Cmd::SetChecked(checked) => {
@@ -617,16 +723,21 @@ impl Component for AnyWidget {
                 }
                 Ok(true)
             }
-            Cmd::SetSelection(selection) => {
-                if let Self::ComboBox { child, .. } = self {
+            Cmd::SetSelection(selection) => match self {
+                Self::ComboBox { child, .. } => {
                     if let Some(index) = selection {
                         child.set_selection(index)?;
                     }
                     Ok(true)
-                } else {
-                    Ok(false)
                 }
-            }
+                Self::TabView { child, .. } => {
+                    if let Some(index) = selection {
+                        child.set_selection(index)?;
+                    }
+                    Ok(true)
+                }
+                _ => Ok(false),
+            },
             Cmd::SetSelectedIndices(selected) => {
                 if let Self::ListBox { child, .. } = self {
                     let len = child.len()?;

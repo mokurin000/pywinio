@@ -106,7 +106,7 @@ pub trait Component: Sized {
 
 ```
 ┌──────────────────────────── Python 侧 ────────────────────────────┐
-│  App / StackPanel / Grid / 14 种 widget  (pyo3 pyclass)            │
+│  App / StackPanel / Grid / 15 种 widget + TabViewItem               │
 │  - 声明组件与初始属性                                              │
 │  - 持有回调 (Py<PyAny>)                                            │
 │  - setter: 改阴影属性 + Shared::post(cmd)                          │
@@ -833,7 +833,7 @@ pywinio-0.1.0.dist-info/RECORD
 
 ### 9.2 真实窗口
 
-运行 `examples/gallery.py`，14 种 widget 全部创建成功，截图如下：
+运行 `examples/gallery.py`，15 种 widget 和 `TabViewItem` 全部创建成功，截图如下：
 
 ![gallery](images/gallery.png)
 
@@ -883,7 +883,7 @@ pywinio-0.1.0.dist-info/RECORD
 
 ## 10. 已知限制（按严重度）
 
-1. **其余 widget 未支持**：TabView、Picture、Canvas、菜单/对话框等仍需扩展 `AnyWidget` 与 `Cmd`。
+1. **其余 widget 未支持**：Picture、Canvas、菜单/对话框等仍需扩展 `AnyWidget` 与 `Cmd`。
 2. **布局语义不完整**：无 min/max/shrink/RTL/自动放置；见 §5.5。复杂界面可能溢出或裁剪。
 3. **全量重排**：任何子组件更新都重建 measure/arrange；组件多时可能掉帧。
 4. **无属性绑定**：只能命令式 setter；没有 `Prop`/observable 集成。
@@ -920,7 +920,7 @@ pywinio-0.1.0.dist-info/RECORD
 
 ### 11.1 v0.2：组件与交互
 
-- 扩展 widget：`TabView`、`Picture`、`Canvas`、菜单与对话框。
+- 扩展 widget：`Picture`、`Canvas`、菜单与对话框。
 - 每个新 widget 加一个 `AnyWidget` variant + `Cmd` 变体；数量继续增长时可用宏生成。
 - 回调携带事件对象：`on_click(event)`；至少提供 `node_id`、可选坐标/键状态。
 - `App.start()` 非阻塞 + `App.wait()`，便于和 asyncio/线程结合。

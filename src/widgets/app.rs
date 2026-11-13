@@ -290,6 +290,28 @@ impl App {
         Ok(make_scroll_view(&self.shared, id, hscroll, vscroll))
     }
 
+    /// Create a tabbed container.
+    #[pyo3(signature = (id, *, selected = 0, on_select = None))]
+    fn tab_view(
+        &self,
+        py: Python<'_>,
+        id: &str,
+        selected: usize,
+        on_select: Option<Py<PyAny>>,
+    ) -> PyResult<TabView> {
+        check_callback(py, &on_select, "on_select")?;
+        Ok(make_tab_view(&self.shared, id, Some(selected), on_select))
+    }
+
+    /// Create a page of a `TabView`.
+    #[pyo3(signature = (tab_view, title))]
+    fn tab_view_item(&self, tab_view: &Bound<'_, PyAny>, title: &str) -> PyResult<TabViewItem> {
+        let tab = tab_view.extract::<PyRef<'_, TabView>>()?;
+        let item = make_tab_view_item(&self.shared, title, title);
+        tab.node.tab_items.lock().unwrap().push(item.node.clone());
+        Ok(item)
+    }
+
     /// Create a headless periodic timer. It is not added to the layout tree.
     #[pyo3(signature = (id, interval_ms = 500, *, on_tick = None, enabled = true))]
     fn timer(
