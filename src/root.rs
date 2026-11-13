@@ -15,6 +15,7 @@ use std::sync::Arc;
 
 use futures_util::StreamExt;
 use pyo3::prelude::*;
+use tracing_subscriber::filter::LevelFilter;
 use winio::prelude::*;
 
 use crate::AppError;
@@ -450,6 +451,10 @@ pub fn run_app(
     title: String,
     size: (f64, f64),
 ) -> std::result::Result<(), String> {
+    tracing_subscriber::fmt()
+        .with_max_level(LevelFilter::INFO)
+        .init();
+
     let app = winio::ui::App::builder()
         .name(&title)
         .build()

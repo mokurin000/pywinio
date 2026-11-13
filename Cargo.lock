@@ -1152,6 +1152,7 @@ version = "0.1.0"
 dependencies = [
  "futures-util",
  "pyo3",
+ "tracing-subscriber",
  "windows-sys 0.61.2",
  "winio",
 ]
@@ -1925,6 +1926,7 @@ dependencies = [
  "android-activity",
  "cfg-if",
  "cfg_aliases",
+ "compio",
  "compio-log",
  "futures-util",
  "image",

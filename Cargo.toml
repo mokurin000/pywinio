@@ -22,6 +22,12 @@ winio = { git = "https://github.com/compio-rs/winio", branch = "fix/win32-prefer
     # The CBS 1.6 variant of winui3 was meant for windows system apps
     # We don't assume users have installed winui3 through any apps
     "winui-enable-cbs",
+    "enable_log",
+] }
+tracing-subscriber = { version = "0.3", default-features = false, features = [
+    "fmt",
+    "ansi",
+    "std",
 ] }
 
 [target.'cfg(windows)'.dependencies]
