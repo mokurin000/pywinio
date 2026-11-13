@@ -65,6 +65,7 @@ pub struct Props {
     pub hscroll: bool,
     pub vscroll: bool,
     pub interval_ms: u64,
+    pub tooltip: String,
 }
 
 impl Default for Props {
@@ -89,6 +90,7 @@ impl Default for Props {
             hscroll: true,
             vscroll: true,
             interval_ms: 500,
+            tooltip: String::new(),
         }
     }
 }

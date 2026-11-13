@@ -26,6 +26,11 @@ pub(crate) fn set_enabled_prop(node: &Arc<WidgetNode>, shared: &Arc<Shared>, ena
     shared.post(node.key, Cmd::SetEnabled(enabled));
 }
 
+pub(crate) fn set_tooltip_prop(node: &Arc<WidgetNode>, shared: &Arc<Shared>, tooltip: String) {
+    node.props.lock().unwrap().tooltip = tooltip.clone();
+    shared.post(node.key, Cmd::SetTooltip(tooltip));
+}
+
 pub(crate) fn set_pos_prop(
     node: &Arc<WidgetNode>,
     shared: &Arc<Shared>,

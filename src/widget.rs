@@ -36,6 +36,7 @@ pub enum Cmd {
     SetEditable(bool),
     SetHScroll(bool),
     SetVScroll(bool),
+    SetTooltip(String),
     /// Internal: turn a native widget event into an output event.
     Raise(Evt),
 }
@@ -267,12 +268,14 @@ impl Component for AnyWidget {
                 child.set_text(&props.text)?;
                 child.set_enabled(props.enabled)?;
                 child.set_visible(props.visible)?;
+                child.set_tooltip(&props.tooltip)?;
                 Ok(Self::Button { node, child })
             }
             WidgetKind::Label => {
                 let mut child = Child::<Label>::init(parent).await?;
                 child.set_text(&props.text)?;
                 child.set_visible(props.visible)?;
+                child.set_tooltip(&props.tooltip)?;
                 Ok(Self::Label { child })
             }
             WidgetKind::Edit => {
@@ -280,6 +283,7 @@ impl Component for AnyWidget {
                 child.set_text(&props.text)?;
                 child.set_enabled(props.enabled)?;
                 child.set_visible(props.visible)?;
+                child.set_tooltip(&props.tooltip)?;
                 Ok(Self::Edit { node, child })
             }
             WidgetKind::CheckBox => {
@@ -288,6 +292,7 @@ impl Component for AnyWidget {
                 child.set_checked(props.checked)?;
                 child.set_enabled(props.enabled)?;
                 child.set_visible(props.visible)?;
+                child.set_tooltip(&props.tooltip)?;
                 Ok(Self::CheckBox { node, child })
             }
             WidgetKind::LinkLabel => {
@@ -296,6 +301,7 @@ impl Component for AnyWidget {
                 child.set_uri(&props.uri)?;
                 child.set_enabled(props.enabled)?;
                 child.set_visible(props.visible)?;
+                child.set_tooltip(&props.tooltip)?;
                 Ok(Self::LinkLabel { node, child })
             }
             WidgetKind::Progress => {
@@ -309,6 +315,7 @@ impl Component for AnyWidget {
                 child.set_pos(props.pos.clamp(props.minimum, maximum))?;
                 child.set_enabled(props.enabled)?;
                 child.set_visible(props.visible)?;
+                child.set_tooltip(&props.tooltip)?;
                 Ok(Self::Progress { node, child })
             }
             WidgetKind::TextBox => {
@@ -316,6 +323,7 @@ impl Component for AnyWidget {
                 child.set_text(&props.text)?;
                 child.set_enabled(props.enabled)?;
                 child.set_visible(props.visible)?;
+                child.set_tooltip(&props.tooltip)?;
                 Ok(Self::TextBox { node, child })
             }
             WidgetKind::Slider => {
@@ -326,6 +334,7 @@ impl Component for AnyWidget {
                 child.set_pos(props.pos.clamp(props.minimum, maximum))?;
                 child.set_enabled(props.enabled)?;
                 child.set_visible(props.visible)?;
+                child.set_tooltip(&props.tooltip)?;
                 Ok(Self::Slider { node, child })
             }
             WidgetKind::UpDownEdit => {
@@ -337,6 +346,7 @@ impl Component for AnyWidget {
                 child.set_value(props.value.clamp(props.minimum, maximum))?;
                 child.set_enabled(props.enabled)?;
                 child.set_visible(props.visible)?;
+                child.set_tooltip(&props.tooltip)?;
                 Ok(Self::UpDownEdit { node, child })
             }
             WidgetKind::ComboBox => {
@@ -353,6 +363,7 @@ impl Component for AnyWidget {
                 }
                 child.set_enabled(props.enabled)?;
                 child.set_visible(props.visible)?;
+                child.set_tooltip(&props.tooltip)?;
                 Ok(Self::ComboBox { node, child })
             }
             WidgetKind::RadioButton => {
@@ -361,6 +372,7 @@ impl Component for AnyWidget {
                 child.set_checked(props.checked)?;
                 child.set_enabled(props.enabled)?;
                 child.set_visible(props.visible)?;
+                child.set_tooltip(&props.tooltip)?;
                 Ok(Self::RadioButton { node, child })
             }
             WidgetKind::ListBox => {
@@ -374,6 +386,7 @@ impl Component for AnyWidget {
                 }
                 child.set_enabled(props.enabled)?;
                 child.set_visible(props.visible)?;
+                child.set_tooltip(&props.tooltip)?;
                 Ok(Self::ListBox { node, child })
             }
             WidgetKind::ScrollView => {
@@ -656,6 +669,24 @@ impl Component for AnyWidget {
                 } else {
                     Ok(false)
                 }
+            }
+            Cmd::SetTooltip(tooltip) => {
+                match self {
+                    Self::Button { child, .. } => child.set_tooltip(&tooltip)?,
+                    Self::Label { child, .. } => child.set_tooltip(&tooltip)?,
+                    Self::Edit { child, .. } => child.set_tooltip(&tooltip)?,
+                    Self::CheckBox { child, .. } => child.set_tooltip(&tooltip)?,
+                    Self::LinkLabel { child, .. } => child.set_tooltip(&tooltip)?,
+                    Self::Progress { child, .. } => child.set_tooltip(&tooltip)?,
+                    Self::TextBox { child, .. } => child.set_tooltip(&tooltip)?,
+                    Self::Slider { child, .. } => child.set_tooltip(&tooltip)?,
+                    Self::UpDownEdit { child, .. } => child.set_tooltip(&tooltip)?,
+                    Self::ComboBox { child, .. } => child.set_tooltip(&tooltip)?,
+                    Self::RadioButton { child, .. } => child.set_tooltip(&tooltip)?,
+                    Self::ListBox { child, .. } => child.set_tooltip(&tooltip)?,
+                    _ => return Ok(false),
+                }
+                Ok(false)
             }
             Cmd::Raise(event) => {
                 self.sync_props();

@@ -19,6 +19,16 @@ impl LinkLabel {
     }
 
     #[getter]
+    fn tooltip(&self) -> String {
+        self.node.props().tooltip
+    }
+
+    #[setter]
+    fn set_tooltip(&self, tooltip: String) {
+        set_tooltip_prop(&self.node, &self.shared, tooltip);
+    }
+
+    #[getter]
     fn text(&self) -> String {
         self.node.props().text
     }

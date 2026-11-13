@@ -1,3 +1,4 @@
+use super::support::set_tooltip_prop;
 use crate::model::*;
 use crate::widget::Cmd;
 use pyo3::exceptions::PyTypeError;
@@ -16,6 +17,16 @@ impl Button {
     #[getter]
     fn id(&self) -> &str {
         &self.node.id
+    }
+
+    #[getter]
+    fn tooltip(&self) -> String {
+        self.node.props().tooltip
+    }
+
+    #[setter]
+    fn set_tooltip(&self, tooltip: String) {
+        set_tooltip_prop(&self.node, &self.shared, tooltip);
     }
 
     #[getter]

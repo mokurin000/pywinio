@@ -74,6 +74,7 @@ grid.add(progress, row=3, col=1)
 # --- TextBox ------------------------------------------------------------
 grid.add(app.label("textbox_label", "TextBox"), valign="center", row=4, col=0)
 text_box = app.text_box("textbox", "multi-line\nread-only demo? no, editable")
+text_box.tooltip = "You could edit multi-line text here."
 grid.add(text_box, row=4, col=1, height=90)
 
 # --- Slider -------------------------------------------------------------

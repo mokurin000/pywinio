@@ -19,6 +19,16 @@ impl Slider {
     }
 
     #[getter]
+    fn tooltip(&self) -> String {
+        self.node.props().tooltip
+    }
+
+    #[setter]
+    fn set_tooltip(&self, tooltip: String) {
+        set_tooltip_prop(&self.node, &self.shared, tooltip);
+    }
+
+    #[getter]
     fn pos(&self) -> usize {
         self.node.props().pos
     }
