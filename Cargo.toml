@@ -17,7 +17,7 @@ extension-module = ["pyo3/extension-module"]
 pyo3 = { version = "0.30.1", features = ["experimental-inspect"] }
 futures-util = "0.3"
 winio = { version = "0.13.0-beta.3", default-features = false, features = [
-    "winui",
+    "win32",
     "win32-dark-mode",
     # The CBS 1.6 variant of winui3 was meant for windows system apps
     # We don't assume users have installed winui3 through any apps
