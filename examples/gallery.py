@@ -31,14 +31,14 @@ def make_grid(rows: int):
     )
 
 
-state = {"links": 0, "ticks": 0}
+state = {"ticks": 0}
 
 
 def refresh_status():
     status.text = (
         f"tab={tabs.selected}  edit={edit.text!r}  checked={check.checked}  "
         f"progress={progress.pos}  slider={slider.pos}  "
-        f"updown={up.value}  links={state['links']}  "
+        f"updown={up.value}  "
         f"combo={combo.selected}  list={lb.selected}  "
         f"radio={radio.checked}  ticks={state['ticks']}"
     )
@@ -65,12 +65,7 @@ basics.add(check, row=1, col=1)
 basics.add(app.label("link_label", "LinkLabel"), valign="center", row=2, col=0)
 
 
-def on_link():
-    state["links"] += 1
-    refresh_status()
-
-
-link = app.link_label("link", "click me (no uri)", on_click=on_link)
+link = app.link_label("link", "click me", uri="https://github.com/compio-rs/winio/")
 basics.add(link, row=2, col=1)
 
 basics.add(app.label("progress_label", "Progress"), valign="center", row=3, col=0)
@@ -124,7 +119,7 @@ inputs.add(radio, row=3, col=1)
 inputs.add(app.label("list_label", "ListBox"), valign="center", row=4, col=0)
 lb = app.list_box(
     "list",
-    [f"item {i}" for i in range(1, 9)],
+    [f"item {i}" for i in range(1, 19)],
     selected=[1, 3],
     multiple=True,
     on_select=refresh_status,
