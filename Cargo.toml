@@ -16,7 +16,7 @@ extension-module = ["pyo3/extension-module"]
 [dependencies]
 pyo3 = { version = "0.30.1", features = ["experimental-inspect"] }
 futures-util = "0.3"
-winio = { git = "https://github.com/compio-rs/winio", branch = "fix/win32-preferred-sizes", default-features = false, features = [
+winio = { git = "https://github.com/compio-rs/winio", rev = "7935d9c5a2da8b19c05ea86033050649a6a32157", default-features = false, features = [
     "win32",
     "win32-dark-mode",
     # The CBS 1.6 variant of winui3 was meant for windows system apps
