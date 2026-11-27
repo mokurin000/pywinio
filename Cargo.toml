@@ -23,6 +23,7 @@ winio = { git = "https://github.com/compio-rs/winio", branch = "fix/win32-prefer
     # We don't assume users have installed winui3 through any apps
     "winui-enable-cbs",
     "enable_log",
+    "qt",
 ] }
 tracing-subscriber = { version = "0.3", default-features = false, features = [
     "fmt",
