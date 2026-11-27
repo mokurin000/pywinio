@@ -2108,7 +2108,7 @@ checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
 [[package]]
 name = "winio"
 version = "0.13.0-beta.3"
-source = "git+https://github.com/compio-rs/winio?branch=fix%2Fwin32-preferred-sizes#7935d9c5a2da8b19c05ea86033050649a6a32157"
+source = "git+https://github.com/compio-rs/winio?rev=7935d9c5a2da8b19c05ea86033050649a6a32157#7935d9c5a2da8b19c05ea86033050649a6a32157"
 dependencies = [
  "android-activity",
  "cfg-if",
@@ -2135,12 +2135,12 @@ dependencies = [
 [[package]]
 name = "winio-callback"
 version = "0.2.0-beta.2"
-source = "git+https://github.com/compio-rs/winio?branch=fix%2Fwin32-preferred-sizes#7935d9c5a2da8b19c05ea86033050649a6a32157"
+source = "git+https://github.com/compio-rs/winio?rev=7935d9c5a2da8b19c05ea86033050649a6a32157#7935d9c5a2da8b19c05ea86033050649a6a32157"
 
 [[package]]
 name = "winio-elm"
 version = "0.7.0-beta.3"
-source = "git+https://github.com/compio-rs/winio?branch=fix%2Fwin32-preferred-sizes#7935d9c5a2da8b19c05ea86033050649a6a32157"
+source = "git+https://github.com/compio-rs/winio?rev=7935d9c5a2da8b19c05ea86033050649a6a32157#7935d9c5a2da8b19c05ea86033050649a6a32157"
 dependencies = [
  "async-stream",
  "futures-util",
@@ -2156,7 +2156,7 @@ dependencies = [
 [[package]]
 name = "winio-handle"
 version = "0.8.0-beta.2"
-source = "git+https://github.com/compio-rs/winio?branch=fix%2Fwin32-preferred-sizes#7935d9c5a2da8b19c05ea86033050649a6a32157"
+source = "git+https://github.com/compio-rs/winio?rev=7935d9c5a2da8b19c05ea86033050649a6a32157#7935d9c5a2da8b19c05ea86033050649a6a32157"
 dependencies = [
  "cfg-if",
  "jni",
@@ -2171,7 +2171,7 @@ dependencies = [
 [[package]]
 name = "winio-layout"
 version = "0.4.0-beta.1"
-source = "git+https://github.com/compio-rs/winio?branch=fix%2Fwin32-preferred-sizes#7935d9c5a2da8b19c05ea86033050649a6a32157"
+source = "git+https://github.com/compio-rs/winio?rev=7935d9c5a2da8b19c05ea86033050649a6a32157#7935d9c5a2da8b19c05ea86033050649a6a32157"
 dependencies = [
  "paste",
  "taffy",
@@ -2182,7 +2182,7 @@ dependencies = [
 [[package]]
 name = "winio-pollable"
 version = "0.6.0-beta.3"
-source = "git+https://github.com/compio-rs/winio?branch=fix%2Fwin32-preferred-sizes#7935d9c5a2da8b19c05ea86033050649a6a32157"
+source = "git+https://github.com/compio-rs/winio?rev=7935d9c5a2da8b19c05ea86033050649a6a32157#7935d9c5a2da8b19c05ea86033050649a6a32157"
 dependencies = [
  "futures-util",
  "scoped-tls",
@@ -2192,7 +2192,7 @@ dependencies = [
 [[package]]
 name = "winio-primitive"
 version = "0.3.0-beta.2"
-source = "git+https://github.com/compio-rs/winio?branch=fix%2Fwin32-preferred-sizes#7935d9c5a2da8b19c05ea86033050649a6a32157"
+source = "git+https://github.com/compio-rs/winio?rev=7935d9c5a2da8b19c05ea86033050649a6a32157#7935d9c5a2da8b19c05ea86033050649a6a32157"
 dependencies = [
  "bitflags",
  "bytemuck",
@@ -2203,7 +2203,7 @@ dependencies = [
 [[package]]
 name = "winio-ui-android"
 version = "0.2.0-beta.3"
-source = "git+https://github.com/compio-rs/winio?branch=fix%2Fwin32-preferred-sizes#7935d9c5a2da8b19c05ea86033050649a6a32157"
+source = "git+https://github.com/compio-rs/winio?rev=7935d9c5a2da8b19c05ea86033050649a6a32157#7935d9c5a2da8b19c05ea86033050649a6a32157"
 dependencies = [
  "android-activity",
  "base64",
@@ -2228,7 +2228,7 @@ dependencies = [
 [[package]]
 name = "winio-ui-app-kit"
 version = "0.7.0-beta.3"
-source = "git+https://github.com/compio-rs/winio?branch=fix%2Fwin32-preferred-sizes#7935d9c5a2da8b19c05ea86033050649a6a32157"
+source = "git+https://github.com/compio-rs/winio?rev=7935d9c5a2da8b19c05ea86033050649a6a32157#7935d9c5a2da8b19c05ea86033050649a6a32157"
 dependencies = [
  "arrayvec",
  "block2",
@@ -2256,7 +2256,7 @@ dependencies = [
 [[package]]
 name = "winio-ui-apple-common"
 version = "0.2.0-beta.3"
-source = "git+https://github.com/compio-rs/winio?branch=fix%2Fwin32-preferred-sizes#7935d9c5a2da8b19c05ea86033050649a6a32157"
+source = "git+https://github.com/compio-rs/winio?rev=7935d9c5a2da8b19c05ea86033050649a6a32157#7935d9c5a2da8b19c05ea86033050649a6a32157"
 dependencies = [
  "block2",
  "compio-log",
@@ -2276,7 +2276,7 @@ dependencies = [
 [[package]]
 name = "winio-ui-qt"
 version = "0.7.0-beta.3"
-source = "git+https://github.com/compio-rs/winio?branch=fix%2Fwin32-preferred-sizes#7935d9c5a2da8b19c05ea86033050649a6a32157"
+source = "git+https://github.com/compio-rs/winio?rev=7935d9c5a2da8b19c05ea86033050649a6a32157#7935d9c5a2da8b19c05ea86033050649a6a32157"
 dependencies = [
  "bitflags",
  "compio-log",
@@ -2301,7 +2301,7 @@ dependencies = [
 [[package]]
 name = "winio-ui-stub"
 version = "0.2.0-beta.3"
-source = "git+https://github.com/compio-rs/winio?branch=fix%2Fwin32-preferred-sizes#7935d9c5a2da8b19c05ea86033050649a6a32157"
+source = "git+https://github.com/compio-rs/winio?rev=7935d9c5a2da8b19c05ea86033050649a6a32157#7935d9c5a2da8b19c05ea86033050649a6a32157"
 dependencies = [
  "futures-util",
  "image",
@@ -2314,7 +2314,7 @@ dependencies = [
 [[package]]
 name = "winio-ui-ui-kit"
 version = "0.2.0-beta.3"
-source = "git+https://github.com/compio-rs/winio?branch=fix%2Fwin32-preferred-sizes#7935d9c5a2da8b19c05ea86033050649a6a32157"
+source = "git+https://github.com/compio-rs/winio?rev=7935d9c5a2da8b19c05ea86033050649a6a32157#7935d9c5a2da8b19c05ea86033050649a6a32157"
 dependencies = [
  "block2",
  "compio-log",
@@ -2343,7 +2343,7 @@ dependencies = [
 [[package]]
 name = "winio-ui-win32"
 version = "0.7.0-beta.3"
-source = "git+https://github.com/compio-rs/winio?branch=fix%2Fwin32-preferred-sizes#7935d9c5a2da8b19c05ea86033050649a6a32157"
+source = "git+https://github.com/compio-rs/winio?rev=7935d9c5a2da8b19c05ea86033050649a6a32157#7935d9c5a2da8b19c05ea86033050649a6a32157"
 dependencies = [
  "arrayvec",
  "compio-log",
@@ -2368,7 +2368,7 @@ dependencies = [
 [[package]]
 name = "winio-ui-windows-common"
 version = "0.8.0-beta.3"
-source = "git+https://github.com/compio-rs/winio?branch=fix%2Fwin32-preferred-sizes#7935d9c5a2da8b19c05ea86033050649a6a32157"
+source = "git+https://github.com/compio-rs/winio?rev=7935d9c5a2da8b19c05ea86033050649a6a32157#7935d9c5a2da8b19c05ea86033050649a6a32157"
 dependencies = [
  "bytemuck",
  "cfg-if",
@@ -2398,7 +2398,7 @@ dependencies = [
 [[package]]
 name = "winio-ui-winui"
 version = "0.7.0-beta.3"
-source = "git+https://github.com/compio-rs/winio?branch=fix%2Fwin32-preferred-sizes#7935d9c5a2da8b19c05ea86033050649a6a32157"
+source = "git+https://github.com/compio-rs/winio?rev=7935d9c5a2da8b19c05ea86033050649a6a32157#7935d9c5a2da8b19c05ea86033050649a6a32157"
 dependencies = [
  "async-stream",
  "compio-log",
